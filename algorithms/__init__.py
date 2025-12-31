@@ -1,2 +1,2 @@
 from .denoising import wavelet_denoise_csi
-from .phase_cleanning import phase_calibration
+from .phase_calibration import phase_calibration
