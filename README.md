@@ -5,6 +5,29 @@ The protocol is designed to **decouple learning performance from hardware-specif
 
 SDP enforces **deterministic physical-layer sanitization**, **canonical tensor construction**, and **standardized training and evaluation procedures**, making it particularly suitable for **wireless sensing research**, **activity recognition**, **device-free sensing**, and **cross-dataset benchmarking**.
 
+Our pipeline and main result can be illustrated by the following two pictures.
+
+
+**SDP Pipeline**
+![pipeline](./img/pipeline.png)
+
+**Mean Top-1 accuracy with 95% confidence intervals over five runs**
+![accuracy](./img/accuracy.png)
+
+More details are illustrated in our paper [A Sensing Dataset Protocol for Benchmarking and Multi-Task Wireless Sensing](https://arxiv.org/abs/2512.12180).
+
+```
+@misc{huang2025sensingdatasetprotocolbenchmarking,
+      title={A Sensing Dataset Protocol for Benchmarking and Multi-Task Wireless Sensing}, 
+      author={Jiawei Huang and Di Zhang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
+      year={2025},
+      eprint={2512.12180},
+      archivePrefix={arXiv},
+      primaryClass={eess.SP},
+      url={https://arxiv.org/abs/2512.12180}, 
+}
+```
+
 ---
 
 ## 🔍 Why SDP?
@@ -35,6 +58,32 @@ SDP is optimized for:
 - **scalable sensing systems**
 
 Typical downstream models include CNNs, Transformers, BiLSTMs, GNNs, and hybrid architectures.
+
+### Supported Dataset:
+
+**Widar3.0**
+ - [Dataset Link](http://sdp8.org/Dataset?id=028828f9-1997-48df-895c-9724551a22ae)
+ - CSI Shape: (Time, 30, 1, 3)
+ - num of classes: 6
+ - total num of used samples: 12,000
+
+**GaitID**
+ - [Dataset Link](http://sdp8.org/Dataset?id=87a65da2-18cb-4b8f-a1ec-c9696890172b)
+ - CSI Shape: (Time, 30, 1, 3)
+ - num of classes: 11
+ - total num of used samples: 22,500
+
+ **XRF55**
+- [Dataset Link](http://sdp8.org/Dataset?id=705e08e7-637e-49a1-aff1-b2f9644467ae)
+ - CSI Shape: (270, 1000)
+ - num of classes: 55
+ - total num of used samples: 9,900
+
+ **ElderAL-CSI**
+ - [Dataset Link](http://sdp8.org/Dataset?id=f144678d-5b4a-4bb9-902c-7aff4916a029)
+ - CSI Shape: (Time, 512, 3, 3)
+ - num of classes: 6
+ - total num of used samples: 2,400
 
 ---
 
@@ -101,10 +150,13 @@ Store various functions for implementing different signal processing algorithms.
 ## 🚀 Quick Start
 
 ### Install Dependencies
-create a venv for dependencies, then run:
+Create a venv for dependencies, then run:
 ```bash
 pip install -r requirements.txt
 ```
+
+### Download Data
+Please download needed datasets from [Our SDP Website](http://sdp8.org/) or other source and put them into `data/your subfolder`.
 
 ### Preprocess
 Considering that there are countless lines of print when processing thousands of files, in your venv, the below is recommended:
