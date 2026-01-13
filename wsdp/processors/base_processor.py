@@ -5,8 +5,8 @@ import numpy as np
 from typing import List
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor
-from sdp.algorithms import phase_calibration, wavelet_denoise_csi
-from sdp.structure import CSIData
+from wsdp.algorithms import phase_calibration, wavelet_denoise_csi
+from wsdp.structure import CSIData
 
 
 class BaseProcessor():

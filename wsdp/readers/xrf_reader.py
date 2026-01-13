@@ -1,9 +1,9 @@
 import numpy as np
 
 from typing import List
-from sdp.readers.base import BaseReader
-from sdp.structure import CSIData
-from sdp.structure import BaseFrame
+from wsdp.readers.base import BaseReader
+from wsdp.structure import CSIData
+from wsdp.structure import BaseFrame
 
 
 class XrfReader(BaseReader):

@@ -8,7 +8,7 @@ def _run_pipeline(args):
 
 
 def main_cli():
-    parser = argparse.ArgumentParser(description="sdp CLI")
+    parser = argparse.ArgumentParser(description="wsdp CLI")
     subparser = parser.add_subparsers(dest="command", required=True, help="available commands")
 
     parser_run = subparser.add_parser("run", help="run pipeline")

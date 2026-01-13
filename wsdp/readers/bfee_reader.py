@@ -2,9 +2,9 @@ import os
 import struct
 import numpy as np
 
-from sdp.readers.base import BaseReader
-from sdp.structure import CSIData
-from sdp.structure import BfeeFrame
+from wsdp.readers.base import BaseReader
+from wsdp.structure import CSIData
+from wsdp.structure import BfeeFrame
 
 
 class BfeeReader(BaseReader):

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from sdp.structure import CSIData
+from wsdp.structure import CSIData
 
 
 class BaseReader(ABC):

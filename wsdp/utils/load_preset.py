@@ -1,7 +1,7 @@
 import json
 
 from importlib.resources import files
-from sdp import configs
+from wsdp import configs
 
 
 def load_config(dataset_name: str) -> dict:

@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sdp"
-version = "0.0.1"
+name = "wsdp"
+version = "0.0.2"
 description = "A pipeline for large scale deep-learning based wireless sensing tasks, including preprocess, training and eval"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,4 +27,4 @@ dependencies = [
 "Bug Tracker" = "https://github.com/yuanhao-cui/Sensing-Data-Protocol/issues"
 
 [project.scripts]
-sdp = "sdp.cli:main_cli"
+wsdp = "wsdp.cli:main_cli"

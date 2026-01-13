@@ -2,9 +2,9 @@ import re
 import csv
 import numpy as np
 
-from sdp.readers.base import BaseReader
-from sdp.structure import CSIData
-from sdp.structure import BaseFrame
+from wsdp.readers.base import BaseReader
+from wsdp.structure import CSIData
+from wsdp.structure import BaseFrame
 
 
 class ElderReader(BaseReader):

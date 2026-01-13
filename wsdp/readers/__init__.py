@@ -5,7 +5,7 @@ from typing import List
 from .bfee_reader import BfeeReader
 from .xrf_reader import XrfReader
 from .elder_reader import ElderReader
-from sdp.structure import CSIData
+from wsdp.structure import CSIData
 
 # import future reader here
 
