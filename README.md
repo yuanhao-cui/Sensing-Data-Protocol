@@ -1,10 +1,9 @@
-![SDP](https://img.shields.io/badge/Sensing_Dataset-Platform-356596?link=https%3A%2F%2Fsdp8.org%2F
+[![SDP](https://img.shields.io/badge/Sensing_Dataset-Platform-356596)](https://sdp8.org/)
+![TOML](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/yuanhao-cui/Sensing-Data-Protocol/refs/heads/main/pyproject.toml&query=%24.project.name&logo=pypi&label=pip
 )
-![TOML](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fgithub.com%2Fyuanhao-cui%2FSensing-Data-Protocol%2Fblob%2Fmain%2Fpyproject.toml&query=%24.project.name&logo=pypi&label=pip
-)
-[![GitHub](https://img.shields.io/github/license/yuanhao-cui/Sensing-Data-Protocol
+[![GitHub](https://img.shields.io/github/license/yuanhao-cui/Sensing-Data-Protocol?color=green
 )](https://github.com/yuanhao-cui/Sensing-Data-Protocol/blob/main/LICENSE)
-![Welcome to Ask!](https://img.shields.io/badge/Welcome_to-Ask-blue)
+![Welcome to Ask](https://img.shields.io/badge/Welcome_to-Ask-72B063)
 
 # SDP: Sensing Data-Protocol for Scalable Wireless Sensing
 
