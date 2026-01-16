@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsdp"
-version = "0.0.4"
+version = "0.0.5"
 description = "A pipeline for large scale deep-learning based wireless sensing tasks, including preprocess, training and eval"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -26,14 +26,14 @@ Our main result can be illustrated by the following pictures.
 More details are illustrated in our paper [A Sensing Dataset Protocol for Benchmarking and Multi-Task Wireless Sensing](https://arxiv.org/abs/2512.12180).
 
 ```
-@misc{huang2025sensingdatasetprotocolbenchmarking,
-      title={A Sensing Dataset Protocol for Benchmarking and Multi-Task Wireless Sensing}, 
-      author={Jiawei Huang and Di Zhang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
-      year={2025},
-      eprint={2512.12180},
+@misc{zhang2026sdpunifiedprotocolbenchmarking,
+      title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wireless Sensing}, 
+      author={Di Zhang and Jiawei Huang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
+      year={2026},
+      eprint={2601.08463},
       archivePrefix={arXiv},
       primaryClass={eess.SP},
-      url={https://arxiv.org/abs/2512.12180}, 
+      url={https://arxiv.org/abs/2601.08463}, 
 }
 ```
 
