@@ -138,7 +138,7 @@ def pipeline(input_path: str, output_folder: str, dataset: str):
         )
 
         print(f"\n--- training complete, save training_history to: \
-               {opath / f"training_history_{current_seed}.csv"} ---")
+               {opath / ('training_history_' + str(current_seed) + '.csv')} ---")
 
         df = pd.DataFrame(training_history)
         df.to_csv(opath / f"training_history_{current_seed}.csv", index_label='epoch')
