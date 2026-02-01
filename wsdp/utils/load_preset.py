@@ -4,7 +4,7 @@ from importlib.resources import files
 from wsdp import configs
 
 
-def load_config(dataset_name: str) -> dict:
+def load_params(dataset_name: str) -> dict:
     try:
         json_path = files(configs) / "model_params.json"
 
@@ -16,6 +16,19 @@ def load_config(dataset_name: str) -> dict:
                                 all dataset available: {list(data.keys())}")
 
         return data[dataset_name]
+
+    except FileNotFoundError:
+        raise RuntimeError("no config file, please contact developers")
+
+
+def load_api_auth():
+    try:
+        json_path = files(configs) / "api_auth.json"
+
+        json_content = json_path.read_text(encoding="utf-8")
+        api = json.loads(json_content)
+
+        return api
 
     except FileNotFoundError:
         raise RuntimeError("no config file, please contact developers")
