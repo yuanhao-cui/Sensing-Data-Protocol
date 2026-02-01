@@ -26,12 +26,16 @@ def pipeline(input_path: str, output_folder: str, dataset: str):
     opath = Path(output_folder)
     dataset_name = dataset
 
-    params = load_params(dataset_name)
-    batch = params["batch"]
-    lr = params["lr"]
-    wd = params["wd"]
-    num_epochs = params["num_epochs"]
-    padding_length = params["padding_length"]
+    try:
+        params = load_params(dataset_name)
+        batch = params["batch"]
+        lr = params["lr"]
+        wd = params["wd"]
+        num_epochs = params["num_epochs"]
+        padding_length = params["padding_length"]
+    except ValueError | FileNotFoundError as e:
+        print(f"error: {e}")
+        return
 
     test_split = 0.4
     val_split = 0.3
