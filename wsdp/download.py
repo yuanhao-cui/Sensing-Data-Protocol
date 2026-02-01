@@ -4,17 +4,17 @@ import requests
 
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .utils import load_api_auth
+from .utils import load_api, load_mapping
 
 
 def download(dataset_name: str, dest: str, username: str, password: str):
-    api = load_api_auth()
+    api = load_api("auth")
     print(f"prepare to download: {dataset_name}")
 
     payload = {
         "username": username,
         "password": password,
-        "dataset": dataset_name
+        "dataset": load_mapping(dataset_name)
     }
 
     try:
