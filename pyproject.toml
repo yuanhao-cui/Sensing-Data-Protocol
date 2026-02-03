@@ -20,7 +20,9 @@ dependencies = [
     "matplotlib>=3.10.0",
     "scikit_learn==1.8.0",
     "seaborn==0.13.2",
-    "PyWavelets==1.8.0"
+    "PyWavelets==1.8.0",
+    "kagglehub==0.4.2",
+    "tqdm>=4.67.2"
 ]
 
 [tool.setuptools.package-data]

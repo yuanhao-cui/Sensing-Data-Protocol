@@ -1,20 +1,29 @@
 import os
 import sys
 import requests
+import kagglehub
 
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .utils import load_api, load_mapping
+from .utils import load_api, load_mapping, download_ftp
 
 
 def download(dataset_name: str, dest: str, username: str, password: str):
+    dn = load_mapping(dataset_name)
+    if dataset_name != 'elderAL':
+        try:
+            _download_without_aws(dataset_name, dest)
+            return
+        except Exception as e:
+            print(f"Error: {e}, try to download with AWS")
+
     api = load_api("auth")
     print(f"prepare to download: {dataset_name}")
 
     payload = {
         "username": username,
         "password": password,
-        "dataset": load_mapping(dataset_name)
+        "dataset": dn
     }
 
     try:
@@ -124,3 +133,17 @@ def _single_thread_download(url, dest, file_name):
         print(f"\ndownload failed: {e}")
         if os.path.exists(dest):
             os.remove(dest)
+
+
+def _download_without_aws(dataset_name: str, dest: str):
+    if dataset_name == 'widar':
+        url = load_api(dataset_name)
+        download_ftp(url, dest)
+    elif dataset_name == 'gait':
+        url = load_api(dataset_name)
+        download_ftp(url, dest)
+    elif dataset_name == 'xrf55':
+        os.environ['KAGGLEHUB_CACHE'] = dest
+        print(f"os.environ['KAGGLEHUB_CACHE'] is changed to {dest}")
+        path = kagglehub.dataset_download("xrfdataset/xrf55-rawdata")
+        print("Path to dataset files:", path)
