@@ -161,8 +161,10 @@ pip install wsdp
 ### Download Data
 Please download needed datasets from [Our SDP Website](http://sdp8.org/) or via command:
 ```bash
-wsdp xxxx [dataset_name] [dir]  # TBD
+wsdp download [dataset_name] [dir]
 ```
+dataset_name must be `widar`, `gait`, `xrf55` and `elderAL`
+
 After downloading, in the folder of your project, please organize **elderAL** datasets in the structure below for extracting labels:
 ```
 ├── data

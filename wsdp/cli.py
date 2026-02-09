@@ -1,4 +1,3 @@
-import getpass
 import argparse
 
 from .core import pipeline
@@ -10,13 +9,7 @@ def _run_pipeline(args):
 
 
 def _download_pipeline(args):
-    username = input("Username: ").strip()
-    password = getpass.getpass("Password: ")
-
-    if not username or not password:
-        print("error: username and password cannot be null")
-        return
-    download(args.dataset_name, args.dest, username, password)
+    download(args.dataset_name, args.dest)
 
 
 def main_cli():
