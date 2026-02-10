@@ -4,9 +4,10 @@ import numpy as np
 
 def wavelet_denoise_csi(csi_tensor):
     """
-    :param: csi_tensor (np.ndarray): CSI data
+    param:
+        csi_tensor (np.ndarray): CSI data
     """
-    # split amplitutde and phase
+    # split amplitude and phase
     amplitude = np.abs(csi_tensor)
     phase = np.angle(csi_tensor)
     

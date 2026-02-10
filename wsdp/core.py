@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from . import readers
 from .datasets import CSIDataset
-from .utils import load_config, train_model, resize_csi_to_fixed_length
+from .utils import load_params, train_model, resize_csi_to_fixed_length
 from .processors.base_processor import BaseProcessor
 from .models import CSIModel
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
@@ -26,12 +26,16 @@ def pipeline(input_path: str, output_folder: str, dataset: str):
     opath = Path(output_folder)
     dataset_name = dataset
 
-    params = load_config(dataset_name)
-    batch = params["batch"]
-    lr = params["lr"]
-    wd = params["wd"]
-    num_epochs = params["num_epochs"]
-    padding_length = params["padding_length"]
+    try:
+        params = load_params(dataset_name)
+        batch = params["batch"]
+        lr = params["lr"]
+        wd = params["wd"]
+        num_epochs = params["num_epochs"]
+        padding_length = params["padding_length"]
+    except ValueError | FileNotFoundError as e:
+        print(f"error: {e}")
+        return
 
     test_split = 0.4
     val_split = 0.3
