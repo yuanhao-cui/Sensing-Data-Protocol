@@ -1,11 +1,13 @@
 import torch.nn as nn
 
+
 class CSIModel(nn.Module):
     def __init__(self, num_classes=10, base_channels=32, latent_dim=128):
         super().__init__()
 
         # Spatial Encoder: cope with dimension F and A
         # input shape (B*T, 1, F, A)
+        self.num_classes = num_classes
         self.spatial_encoder = nn.Sequential(
             nn.Conv2d(1, base_channels, 3, padding=1),
             nn.BatchNorm2d(base_channels),
@@ -34,7 +36,7 @@ class CSIModel(nn.Module):
         self.adaptive_pool = nn.AdaptiveAvgPool1d(1)
         self.flatten = nn.Flatten()
 
-        self.output_layer = nn.Linear(latent_dim, num_classes)
+        self.output_layer = nn.Linear(latent_dim, self.num_classes)
 
     def forward(self, x):
         B, T, F, A = x.shape

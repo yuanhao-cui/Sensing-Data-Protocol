@@ -1,4 +1,4 @@
-[![SDP](https://img.shields.io/badge/SDP_Webside-Click_here-356596)](https://sdp8.org/)
+from default_model_template import YourCustomModel[![SDP](https://img.shields.io/badge/SDP_Webside-Click_here-356596)](https://sdp8.org/)
 [![TOML](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/yuanhao-cui/Sensing-Data-Protocol/refs/heads/main/pyproject.toml&query=%24.project.name&logo=pypi&label=pip)](https://pypi.org/project/wsdp/
 )
 [![GitHub](https://img.shields.io/github/license/yuanhao-cui/Sensing-Data-Protocol?color=green
@@ -210,3 +210,22 @@ no need to create scripts, just run in command:
 ```bash
 wsdp run [input_path] [output_folder] [dataset_name]
 ```
+
+## According to custom models
+Using your models to train and evaluate is supported. Please be aware that the shape of input tensors should be (Batch, Timestamp, Frequency, Antenna) and at the last line of your file, the following line should be added:
+```python
+model = YourCustomModelClassName
+```
+Then, you can run:
+```python
+from wsdp import pipeline
+
+pipeline(input_path, output_folder, dataset_name, custom_model_path)
+```
+or:
+```bash
+wsdp run [input_path] [output_folder] [dataset_name] [custom_model_path]
+```
+
+---
+For more information or a quick start with your custom models, please refer to our template: `default_model_template.py`.
