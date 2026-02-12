@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from . import readers
 from .datasets import CSIDataset
-from .utils import load_params, train_model, resize_csi_to_fixed_length
+from .utils import load_params, train_model, resize_csi_to_fixed_length, load_custom_model
 from .processors.base_processor import BaseProcessor
 from .models import CSIModel
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
@@ -19,12 +19,17 @@ from sklearn.model_selection import GroupShuffleSplit
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-def pipeline(input_path: str, output_folder: str, dataset: str):
+def pipeline(input_path: str, output_folder: str, dataset: str, model_path=None):
     # params
     ipath = input_path
     os.makedirs(output_folder, exist_ok=True)
     opath = Path(output_folder)
     dataset_name = dataset
+
+    if model_path is not None:
+        print(f"Loading model from {model_path}")
+    else:
+        print(f"Loading default model")
 
     try:
         params = load_params(dataset_name)
@@ -121,7 +126,11 @@ def pipeline(input_path: str, output_folder: str, dataset: str):
         val_loader = DataLoader(val_dataset, batch_size=batch, num_workers=16, shuffle=False)
 
         num_classes = len(unique_labels)
-        model = CSIModel(num_classes=num_classes).to(device)
+        if model_path is None:
+            model = CSIModel(num_classes=num_classes)
+        else:
+            model = load_custom_model(model_path, num_classes)
+        model = model.to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
