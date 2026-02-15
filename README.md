@@ -1,4 +1,4 @@
-from default_model_template import YourCustomModel[![SDP](https://img.shields.io/badge/SDP_Webside-Click_here-356596)](https://sdp8.org/)
+[![SDP](https://img.shields.io/badge/SDP_Webside-Click_here-356596)](https://sdp8.org/)
 [![TOML](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/yuanhao-cui/Sensing-Data-Protocol/refs/heads/main/pyproject.toml&query=%24.project.name&logo=pypi&label=pip)](https://pypi.org/project/wsdp/
 )
 [![GitHub](https://img.shields.io/github/license/yuanhao-cui/Sensing-Data-Protocol?color=green
@@ -7,80 +7,220 @@ from default_model_template import YourCustomModel[![SDP](https://img.shields.io
 
 # SDP: Sensing Data Protocol for Scalable Wireless Sensing
 
-**SDP (Sensing Data Protocol)** is a protocol-level abstraction framework and unified benchmark for scalable wireless sensing and perception based on wireless signals such as Channel State Information(CSI).
-The protocol is designed to decouple learning performance from hardware-specific artifacts, enabling **fair, reproducible, and scalable evaluation** of deep learning models for wireless sensing tasks.
+SDP is a protocol-level abstraction and unified benchmark for reproducible wireless sensing.
 
-SDP enforces **deterministic physical-layer sanitization, canonical tensor construction, and standardized training and evaluation procedures**, making it particularly suitable for wireless sensing research, activity recognition, device-free sensing, and cross-dataset benchmarking.
+SDP is not a new neural network, but a standardized protocol that unifies CSI representations for fair comparison. Instead of improving accuracy through hidden preprocessing tricks, SDP ensures that:
 
-Our main result can be illustrated by the following pictures.
+- Every dataset follows the same sanitization rules
+- Every model receives the same canonical tensor
+- Every experiment is reproducible
 
-**Mean Top-1 accuracy with 95% confidence intervals over five runs**
-![accuracy](./img/accuracy.png)
-
-**Performance stability comparison between the baseline and SDP across five random seeds. Boxplots show the distribution of Top-1 accuracy, with scattered dots indicating individual runs.**
-![accuracy](./img/reproducibility_and_stability.png)
-
-**Rank consistency heatmap across five random seeds on the ElderAL-CSI dataset. Colors indicate per-seed performance rank (1 = best), with overlaid Top-1 accuracy values. Full SDP exhibits stable top-ranked performance, while ablated variants show higher ranking variability.**
-![accuracy](./img/ablation_rank.png)
-
-More details are illustrated in our paper [A Sensing Dataset Protocol for Benchmarking and Multi-Task Wireless Sensing](https://arxiv.org/abs/2512.12180).
-
-```
-@misc{zhang2026sdpunifiedprotocolbenchmarking,
-      title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wireless Sensing}, 
-      author={Di Zhang and Jiawei Huang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
-      year={2026},
-      eprint={2601.08463},
-      archivePrefix={arXiv},
-      primaryClass={eess.SP},
-      url={https://arxiv.org/abs/2601.08463}, 
-}
-```
+SDP acts as a protocol-level middleware between raw CSI and learning models.
 
 ---
+# 1. Quick Start
 
-## 🔍 Why SDP?
+## Step 1: Install Dependencies
+Create a virtual env in conda or python, then run:
+```bash
+pip install wsdp
+```
+
+## Step 2: Download Dataset
+The size of `elderAL` is the smallest. Using it for a quick start is recommended.
+
+Please download needed datasets from [Our SDP Website](http://sdp8.org/) or via command:
+```bash
+wsdp download eldAL ./data
+```
+`elderAL` can be changed to `widar`, `gait` or `xrf55`
+
+In the folder of your project, please organize **elderAL** datasets in the structure below for extracting labels:
+```
+├── data
+    ├── elderAL
+    │   ├── action0_static_new
+    │   │   ├── user0_position1_activity0
+    │   │   ├── ...
+    │   │
+    │   ├── action1_walk_new
+    │   ├── ...
+    │
+    ├── widar
+    ├── gait
+    ├── xrf55
+```
+
+## Step 3: Train and Evaluate
+**Function call:**
+
+Create a script, say `script.py`, then copy the code below and paste into the script:
+```pycon
+from wsdp import pipeline
+
+pipeline("./data/elderAL", "./output", "elderAL")
+```
+Then run this command in Terminal:
+```bash
+nohup python script.py >> output.log 2>&1 &
+```
+
+**Command call:**
+
+No need to create scripts, just run this command in Terminal:
+
+```bash
+wsdp run ./data/elderAL ./output elderAL
+```
+
+When running, SDP will automatically:
+- Sanitize raw CSI
+- Convert it into canonical tensors
+- Train a baseline model
+- Evaluate performance
+
+After running, besides `output.log`, check `./output`, you can see:
+- best_model.pth
+- confusion_matrix.png
+
+If you see these files, SDP is working correctly.
+
+---
+# 2. Modify & Research (1-Hour Challenge)
+**Goal: Modify the model and produce your own results**
+
+You can modify SDP at three levels:
+- Replace the model
+- Adjust preprocessing
+- Add new datasets
+
+## 2.1 Plug in your own models
+Create a file: `custom_model.py` then coding for free
+
+All model receive input in the format: `(Batch, Timestamp, Frequency, Antenna)` 
+
+At the last line of your file, the following line should be added:
+```python
+model = YourCustomModelClassName
+```
+For more information, please refer to `default_model_template.py` in this project
+
+Then, run:
+```python
+from wsdp import pipeline
+
+pipeline("./data/elderAL", "./output", "elderAL", "custom_model.py")
+```
+or:
+```bash
+wsdp run ./data/elderAL ./output elderAL custom_model.py
+```
+## 2.2 Codebase Map (Where to modify)
+
+if you want to go further:
+- models/ → Define or compare architectures
+- algorithms/ → Modify function for signal processing like denoising and calibration
+- datasets/ → Add a new dataset
+- readers/ → Add new logic for transforming a new format into `CSIFrame`
+- structure/CSIFrame → Define the format of your post-process data
+- processors/ → Adjust protocol logic (canonical projection, segmentation)
+
+
+---
+# 3. Understanding SDP (10-Min Read)
+
+## 3.1 Why Do We Need SDP?
 
 Wireless sensing research often suffers from:
-- Inconsistent **hardware configurations**
-- Dataset-specific **preprocessing pipelines**
-- Non-reproducible **training and evaluation protocols**
+- Hardware-specific CSI formats
+- Inconsistent preprocessing pipelines
+- Unstable training results
+- Large performance variance across random seeds
 
-**SDP addresses these challenges at the protocol level**, rather than the model level. 
-The SDP unified data processing pipeline, including sanitation and transformation, transform raw data into uniform canonical tensors ready for deep learning.
-![pipeline](./img/pipeline.png)
-### Core Design Principles
-- **Protocol-level abstraction**
-- **Deterministic PHY-layer sanitization** to eliminate randomness
-- **Canonical tensor representation** for deep learning compatibility
-- **Unified benchmark pipeline** across datasets and tasks
-- **Extensible architecture** for new datasets, processors, and models
+As a result, models cannot be fairly compared.
+
+SDP solves this problem at the protocol level, not the model level.
+
+SDP projects raw CSI into a fixed canonical frequency grid (K=30),
+ensuring cross-hardware comparability.
+
+## 3.2 The SDP Pipeline
+
+```
+Raw CSI
+  ↓
+Deterministic Sanitization
+  ↓
+Canonical Tensor Construction
+  ↓
+Deep Learning Model
+  ↓
+Prediction
+```
+
+## 3.3 Deterministic Sanitization
+
+Raw CSI contains hardware distortions such as:
+- Phase offsets
+- Sampling time offsets
+- Noise fluctuations
+
+SDP enforces deterministic calibration and denoising.
+
+This guarantees:
+- The same raw CSI always produces the same cleaned tensor.
+- Reproducibility is no longer optional — it is enforced.
+
+## 3.4 Canonical Tensor Construction
+
+After sanitization, SDP constructs a Canonical CSI Tensor.
+
+In the protocol definition, the tensor is expressed as:
+
+$$X \in \mathbb{C}^{A \times K \times T}$$
+
+Where:
+- A (Antenna): spatial dimension (Tx–Rx antenna pairs)
+- K (Frequency): canonical frequency resolution
+- T (Timestamp): temporal samples
+
+### 3.4.1 Canonical Frequency Resolution
+
+SDP projects all raw CSI into a fixed canonical frequency grid:
+
+K = 30
+
+This is a protocol constant, not a hyperparameter.
+
+Regardless of the original hardware (e.g., 56 or 512 subcarriers),
+all CSI is interpolated into 30 standardized frequency bins.
+
+This ensures cross-hardware comparability.
+
+### 3.4.2 Deep Learning Input Format
+
+For model training, the tensor is rearranged into:
+
+(Batch, Timestamp, Frequency, Antenna)
+
+This layout is video-like, where:
+- Timestamp → time dimension
+- Frequency × Antenna → spatial structure
+
+This arrangement allows CNNs, Transformers, and RNNs to operate naturally.
+
+## 3.5 Why This Matters
+
+With SDP:
+- Inter-seed variance is significantly reduced
+- Model rankings become stable
+- Cross-dataset evaluation becomes possible
+
+SDP does not define the model.It defines the rules of the experiment.
 
 ---
 
-## 📦 Key Features
-
-- **Unified CSI abstraction** across heterogeneous datasets
-- **Hardware-agnostic signal representation**
-- **Modular reader–processor–model pipeline**
-- **Deterministic preprocessing for reproducibility**
-- **Plug-and-play extensibility**
-- **Benchmark-ready training and evaluation flow**
-
----
-
-## 📚 Target Use Cases
-
-### SDP is optimized for:
-- CSI-based **Human Activity Recognition (HAR)**
-- **Gait recognition** and biometric identification
-- **Wireless sensing + deep learning** research
-- **Cross-domain / cross-hardware generalization**
-- **scalable sensing systems**
-
-Typical downstream models include CNNs, Transformers, BiLSTMs, GNNs, and hybrid architectures.
-
-### Supported Dataset:
+# 4. Supported Dataset:
 
 **Widar3.0**
  - Dataset Link: [Widar3.0: Wi-Fi-based Hand Gesture Recognition Dataset](http://sdp8.org/Dataset?id=028828f9-1997-48df-895c-9724551a22ae)
@@ -109,123 +249,28 @@ Typical downstream models include CNNs, Transformers, BiLSTMs, GNNs, and hybrid 
 
 ---
 
-## 📁 Project Structure Overview
+# 5. Benchmark Results
+**Mean Top-1 accuracy with 95% confidence intervals over five runs**
+![accuracy](./img/accuracy.png)
 
-### `algorithms/`
+**Performance stability comparison between the baseline and SDP across five random seeds. Boxplots show the distribution of Top-1 accuracy, with scattered dots indicating individual runs.**
+![accuracy](./img/reproducibility_and_stability.png)
 
-Store various functions for implementing different signal processing algorithms. 
-
-- `./denoising.py`  
-  Store functions for signal denoising
-- `./phase_calibration.py`  
-  Store functions for phase calibration
-
----
-
-### `readers/`
-- Store Dataset-specific readers
-- Converts raw files into `List` of `CSIData`
+**Rank consistency heatmap across five random seeds on the ElderAL-CSI dataset. Colors indicate per-seed performance rank (1 = best), with overlaid Top-1 accuracy values. Full SDP exhibits stable top-ranked performance, while ablated variants show higher ranking variability.**
+![accuracy](./img/ablation_rank.png)
 
 ---
 
-### `structure/`
-- Definition of `CSIData` and all kinds of `CSIFrame`
-
----
-
-### `processors/`
- - Definition of processor for signal processing and sanitization
-
----
-
-### `datasets/` 
- - Definition of classes extend `torch.utils.data.Dataset`
-
----
-
-### `models/`
- - Definition of deep learning models
-
----
-
-
-
-## 🚀 Quick Start
-
-### Install Dependencies
-Create a venv for dependencies, then run:
-```bash
-pip install wsdp
+# 6. Academic Reference
+If you use SDP in your research, please site:
 ```
-
-### Download Data
-Please download needed datasets from [Our SDP Website](http://sdp8.org/) or via command:
-```bash
-wsdp download [dataset_name] [dir]
+@misc{zhang2026sdpunifiedprotocolbenchmarking,
+      title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wireless Sensing}, 
+      author={Di Zhang and Jiawei Huang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
+      year={2026},
+      eprint={2601.08463},
+      archivePrefix={arXiv},
+      primaryClass={eess.SP},
+      url={https://arxiv.org/abs/2601.08463}, 
+}
 ```
-dataset_name must be `widar`, `gait`, `xrf55` and `elderAL`
-
-After downloading, in the folder of your project, please organize **elderAL** datasets in the structure below for extracting labels:
-```
-├── data
-    ├── elderAL
-    │   ├── action0_static_new
-    │   │   ├── user0_position1_activity0
-    │   │   ├── ...
-    │   │
-    │   ├── action1_walk_new
-    │   ├── ...
-    │
-    ├── widar
-    ├── gait
-    ├── xrf55
-```
-
-### Run
-This project supports both functional call and command-line call in the shell. The calling methods are as follows respectively:
-
----
- - For `input_path`: `/data/[widar, gait, xrf55, elderAL]` are recommended
- - For `dataset_name`: `widar`, `gait`, `xrf55`, `elderAL` are available
----
-
-**function call:**
-
-Create a script, say script.py, then copy the code below and paste into the script:
-```pycon
-from wsdp import pipeline
-
-pipeline(input_path, output_folder, dataset_name)
-```
-
-Considering that training process will generate numerous lines about information like acc and loss, in function-call, it is recommended to run via the command below:
-```bash
-nohup python script.py >> output.log 2>&1 &
-```
-
-**command:**
-
-no need to create scripts, just run in command:
-
-```bash
-wsdp run [input_path] [output_folder] [dataset_name]
-```
-
-## According to custom models
-Using your models to train and evaluate is supported. Please be aware that the shape of input tensors should be (Batch, Timestamp, Frequency, Antenna) and at the last line of your file, the following line should be added:
-```python
-model = YourCustomModelClassName
-```
-Then, you can run:
-```python
-from wsdp import pipeline
-
-pipeline(input_path, output_folder, dataset_name, custom_model_path)
-```
-or:
-```bash
-wsdp run [input_path] [output_folder] [dataset_name] [custom_model_path]
-```
-
----
-For more information or a quick start with your custom models, please refer to our template: `default_model_template.py`.
