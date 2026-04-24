@@ -2,7 +2,55 @@
 
 All notable changes to WSDP are documented here.
 
-## [Unreleased] — 2026-03-21
+## [0.5.0] — 2026-04-24
+
+### 🔧 Bug Fixes
+
+#### Wavelet Denoising 2D Input Support
+**Problem**: `wavelet_denoise_csi()` unconditionally unpacked `csi_tensor.shape` into 3 dimensions (`T, S, R`), causing failures on 2D `(T, F)` input — a long-standing gap between test coverage and implementation contract.
+
+**Fix**: Refactored the function to handle both 2D `(T, F)` and 3D `(T, F, A)` inputs. Single-antenna data is correctly processed without requiring an explicit trailing dimension.
+
+**Files changed**: `src/wsdp/algorithms/denoising.py`, `tests/test_all_algorithms_full.py`
+
+#### Dataset Download Reliability
+- Added `allow_redirects=True` and `verify=False` to HTTP requests for environments with self-signed certificates or redirect chains.
+- Suppressed `InsecureRequestWarning` to avoid noise in logs when downloading datasets.
+- Fixed test patching logic for Python < 3.13 where `wsdp.download` function shadowed the module object, breaking `patch('wsdp.download.requests')`.
+
+**Files changed**: `src/wsdp/download.py`, `tests/test_download.py`
+
+#### `interpolate()` Parameter Passing
+**Fix**: `interpolate()` now inspects the target function signature before passing `method=...`, preventing `TypeError` on registered interpolators that do not accept a `method` keyword.
+
+**Files changed**: `src/wsdp/algorithms/__init__.py`
+
+### 📖 Documentation & Consistency
+
+- **API docs overhaul**: `docs/api/core.md`, `docs/api/algorithms.md`, and `docs/api/readers.md` updated with full parameter tables, accurate signatures, and usage examples aligned with current code.
+- **User guide refresh**: `docs/user-guide/configuration.md` and `docs/getting-started/quickstart.md` rewritten to reflect the 6 built-in presets, custom model loading, and YAML config format.
+- **README expansion**: Added structured tutorial directory, user guide links, and reference sections in both English and Chinese.
+- **Doc/code sync**: Fixed mismatched function signatures in examples and tutorial notebook.
+
+### ✨ New Features
+
+#### Configurable Pipeline Processor
+- Introduced `ConfigurableProcessor` class for user-defined algorithm pipelines:
+  ```python
+  from configurable_processor import ConfigurableProcessor
+  processor = ConfigurableProcessor({'denoise': {'method': 'wavelet'},
+                                      'calibrate': {'method': 'stc'}})
+  ```
+- Ships with `run_full_pipeline.py` — an end-to-end demonstration script using real `xrf55` data, covering data loading, algorithm preprocessing, GroupShuffleSplit, model training, and evaluation. Supports switching algorithms via presets or custom dicts, and swapping models via name string.
+
+### 🧹 Code Quality
+
+- **Repository hygiene**: Archived legacy `wsdp_old/` (29 modules) to `archive/`; removed 70 tracked `site/` MkDocs build artifacts from git.
+- **Ruff lint compliance**: Fixed 22 files across `src/wsdp/` — removed unused imports (`torch.nn.functional`, `math`), eliminated dead variables, fixed PEP 8 formatting, and replaced lazy imports with top-level imports in `registry.py`.
+- **Processor robustness**: `base_processor._process_single_csi()` shape guards now explicitly protect against degenerate 1D data while preserving `(T, F, 1)` for single-antenna inputs.
+- **Full test suite**: Synthetic CSI data generator replaced with a physics-inspired model (static path + dynamic human-motion path + AWGN) for more realistic algorithm validation.
+
+## [0.4.0] — 2026-03-30
 
 ### 🔧 Bug Fixes
 
