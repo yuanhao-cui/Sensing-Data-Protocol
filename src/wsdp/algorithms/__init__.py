@@ -49,6 +49,11 @@ from .visualization import (
     plot_denoising_comparison,
     plot_phase_calibration,
 )
+from .pipeline_diagnostics import (
+    compute_pipeline_metrics,
+    plot_pipeline_diagnostics,
+    run_pipeline_diagnostics,
+)
 
 # Registry imports
 from .registry import (
@@ -274,6 +279,9 @@ __all__ = [
     "plot_csi_heatmap",
     "plot_denoising_comparison",
     "plot_phase_calibration",
+    "compute_pipeline_metrics",
+    "plot_pipeline_diagnostics",
+    "run_pipeline_diagnostics",
     # Unified API
     "denoise",
     "calibrate",
