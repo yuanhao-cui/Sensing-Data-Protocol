@@ -1,6 +1,8 @@
 """Tests for offline pipeline diagnostic artifacts and metrics."""
 import csv
 import json
+import subprocess
+import sys
 
 import matplotlib
 matplotlib.use("Agg")
@@ -21,7 +23,7 @@ def _synthetic_motion_csi(T=128, F=12, A=2, freq=0.12, noise=0.01):
 
 
 def test_run_pipeline_diagnostics_writes_png_metrics_and_manifest(tmp_path):
-    from wsdp.algorithms import run_pipeline_diagnostics
+    from wsdp.diagnostics import run_pipeline_diagnostics
 
     raw = _synthetic_motion_csi()
     processed = raw * 0.8
@@ -71,7 +73,7 @@ def test_run_pipeline_diagnostics_writes_png_metrics_and_manifest(tmp_path):
 
 
 def test_compute_pipeline_metrics_detects_over_smoothed_motion_loss():
-    from wsdp.algorithms import compute_pipeline_metrics
+    from wsdp.diagnostics import compute_pipeline_metrics
 
     raw = _synthetic_motion_csi()
     over_smoothed = np.repeat(raw.mean(axis=0, keepdims=True), raw.shape[0], axis=0)
@@ -89,7 +91,7 @@ def test_compute_pipeline_metrics_detects_over_smoothed_motion_loss():
 
 
 def test_pipeline_diagnostics_rejects_mismatched_shapes_without_outputs(tmp_path):
-    from wsdp.algorithms import run_pipeline_diagnostics
+    from wsdp.diagnostics import run_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=10, A=1)
     processed = _synthetic_motion_csi(T=64, F=12, A=1)
@@ -102,7 +104,7 @@ def test_pipeline_diagnostics_rejects_mismatched_shapes_without_outputs(tmp_path
 
 @pytest.mark.parametrize("sample_name", ["../escape", "/tmp/escape", "bad/name", "bad\\name", "", "."])
 def test_pipeline_diagnostics_rejects_unsafe_sample_names_without_outputs(tmp_path, sample_name):
-    from wsdp.algorithms import run_pipeline_diagnostics
+    from wsdp.diagnostics import run_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=8, A=1)
     processed = raw * 0.9
@@ -114,7 +116,7 @@ def test_pipeline_diagnostics_rejects_unsafe_sample_names_without_outputs(tmp_pa
 
 
 def test_run_pipeline_diagnostics_appends_metrics_and_manifest_samples(tmp_path):
-    from wsdp.algorithms import run_pipeline_diagnostics
+    from wsdp.diagnostics import run_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=8, A=1)
     processed = raw * 0.9
@@ -133,7 +135,7 @@ def test_run_pipeline_diagnostics_appends_metrics_and_manifest_samples(tmp_path)
 
 
 def test_plot_pipeline_diagnostics_uses_shared_raw_processed_scales(tmp_path):
-    from wsdp.algorithms import plot_pipeline_diagnostics
+    from wsdp.diagnostics import plot_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=8, A=1)
     processed = raw * 0.2
@@ -149,7 +151,7 @@ def test_plot_pipeline_diagnostics_uses_shared_raw_processed_scales(tmp_path):
 
 
 def test_plot_pipeline_diagnostics_can_omit_doppler_panel(tmp_path):
-    from wsdp.algorithms import plot_pipeline_diagnostics
+    from wsdp.diagnostics import plot_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=8, A=1)
     processed = raw * 0.9
@@ -161,3 +163,22 @@ def test_plot_pipeline_diagnostics_can_omit_doppler_panel(tmp_path):
     assert len(fig.axes) >= 4
     import matplotlib.pyplot as plt
     plt.close(fig)
+
+
+def test_diagnostics_metrics_import_is_lightweight():
+    code = """
+import sys
+from wsdp.diagnostics import compute_pipeline_metrics
+blocked = {'torch', 'sklearn', 'matplotlib', 'scipy'} & set(sys.modules)
+if blocked:
+    raise SystemExit(','.join(sorted(blocked)))
+assert callable(compute_pipeline_metrics)
+"""
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_algorithms_diagnostics_exports_remain_backward_compatible():
+    from wsdp.algorithms import compute_pipeline_metrics as legacy_metrics
+    from wsdp.diagnostics import compute_pipeline_metrics
+
+    assert legacy_metrics is compute_pipeline_metrics

@@ -4,9 +4,9 @@
 
 **Goal:** Build an offline CSI pipeline diagnostic API that writes fixed before/after visual panels and proxy metrics without services or GPU.
 
-**Architecture:** Add a focused `wsdp.algorithms.pipeline_diagnostics` module for validation, metrics, and artifact writing. Reuse existing `doppler_spectrum()` and matplotlib infrastructure; expose the public API through `wsdp.algorithms.__init__`.
+**Architecture:** Add a focused `wsdp.diagnostics` module for validation, metrics, and artifact writing. Keep metrics NumPy-only, lazy-load plotting dependencies, and retain `wsdp.algorithms` exports as compatibility shims.
 
-**Tech Stack:** Python, NumPy, SciPy STFT through existing Doppler feature, matplotlib Agg-compatible plotting, pytest temporary directories.
+**Tech Stack:** Python, NumPy, local STFT-style Doppler summary, matplotlib Agg-compatible plotting, pytest temporary directories.
 
 ---
 
@@ -22,13 +22,15 @@
 ### Task 2: Minimal Diagnostic Module
 
 **Files:**
-- Create: `src/wsdp/algorithms/pipeline_diagnostics.py`
+- Create: `src/wsdp/diagnostics/pipeline.py`
+- Create: `src/wsdp/diagnostics/__init__.py`
+- Modify: `src/wsdp/algorithms/pipeline_diagnostics.py`
 - Modify: `src/wsdp/algorithms/__init__.py`
 
 - [ ] Implement `compute_pipeline_metrics(raw, processed, sampling_rate=1.0, motion_band=None)` returning a flat dict of finite numeric proxy metrics.
 - [ ] Implement `plot_pipeline_diagnostics(raw, processed, save_path, include_doppler=True, ...)` returning a matplotlib Figure and writing one PNG.
 - [ ] Implement `run_pipeline_diagnostics(raw, processed, output_dir, sample_name='sample', include_doppler=True, ...)` writing `<sample_name>_diagnostic.png`, `metrics.csv`, and `manifest.json`.
-- [ ] Export the three functions from `wsdp.algorithms`.
+- [ ] Export the three functions from `wsdp.diagnostics` and keep `wsdp.algorithms` compatibility exports.
 
 ### Task 3: Verification And Cleanup
 

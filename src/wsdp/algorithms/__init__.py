@@ -49,7 +49,7 @@ from .visualization import (
     plot_denoising_comparison,
     plot_phase_calibration,
 )
-from .pipeline_diagnostics import (
+from wsdp.diagnostics import (
     compute_pipeline_metrics,
     plot_pipeline_diagnostics,
     run_pipeline_diagnostics,

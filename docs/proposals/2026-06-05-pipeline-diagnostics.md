@@ -10,12 +10,17 @@ scope: pipeline-diagnostics
 
 Add a small offline diagnostic tool that helps reject obviously bad CSI processing pipelines before full model training. The tool compares raw and processed CSI with fixed visual panels and simple proxy metrics, without starting services or using GPU by default.
 
+## Architecture
+
+The recommended entry point is `wsdp.diagnostics`, a standalone pre-pipeline module. It accepts already materialized CSI arrays, computes metrics with NumPy only, and lazy-loads plotting dependencies only when PNG artifacts are requested. Existing `wsdp.algorithms` exports remain as compatibility shims.
+
 ## Acceptance Criteria
 
 | Scenario | Expected behavior |
 |---|---|
 | User calls the diagnostic API with raw CSI and processed CSI of matching shape | It writes a contact-sheet PNG and a metrics CSV to the requested output directory. |
 | User enables Doppler panels | The PNG includes raw and processed Doppler spectrogram summaries computed on CPU. |
+| User imports metrics from `wsdp.diagnostics` | The import does not load the main training/inference pipeline or GPU frameworks. |
 | A deliberately over-smoothed pipeline removes motion-band energy from synthetic CSI | The metrics show lower motion-band energy ratio and lower dynamic energy than the original signal. |
 | Inputs have incompatible shapes or unsupported dimensions | The tool raises a clear `ValueError` without writing partial outputs. |
 | Tests run in CI/local pytest | Test artifacts are written only to pytest temporary directories; no service starts and no GPU is required. |

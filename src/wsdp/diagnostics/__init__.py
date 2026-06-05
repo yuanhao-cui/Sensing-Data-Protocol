@@ -1,9 +1,5 @@
-"""Backward-compatible imports for pipeline diagnostics.
-
-Prefer importing these helpers from ``wsdp.diagnostics`` for standalone
-pre-pipeline screening.
-"""
-from wsdp.diagnostics import (
+"""Standalone CSI diagnostics for pre-pipeline screening."""
+from .pipeline import (
     compute_pipeline_metrics,
     plot_pipeline_diagnostics,
     run_pipeline_diagnostics,
