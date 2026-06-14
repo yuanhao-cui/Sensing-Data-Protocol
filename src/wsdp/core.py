@@ -18,6 +18,7 @@ from .processors.base_processor import BaseProcessor
 from .processors import ConfigurableProcessor
 from .models import create_model
 from .algorithms import apply_preset, load_config as load_algorithm_config
+from .record import SeedRecord, persist_pipeline_record
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
 from torch.utils.data import DataLoader
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
@@ -315,6 +316,7 @@ def pipeline(
     logger.info(f"the following {num_seeds} seeds will be used: {random_seeds}")
 
     top1_accuracies = []
+    seed_records = []
 
     # Check if we have enough groups for GroupShuffleSplit
     n_groups = len(set(zero_indexed_groups))
@@ -419,6 +421,19 @@ def pipeline(
         plt.savefig(figure_path)
         plt.close()
 
+        # ---- collect per-seed metrics ----
+        if isinstance(training_history, dict) and training_history.get('train_acc'):
+            train_acc = training_history['train_acc'][-1] / 100.0
+        else:
+            train_acc = 0.0
+        val_acc = checkpoint.get('best_val_acc', 0.0) / 100.0
+        seed_records.append(SeedRecord(
+            seed=current_seed,
+            train_acc=train_acc,
+            val_acc=val_acc,
+            test_acc=current_top1_acc,
+        ))
+
     accuracies_np = np.array(top1_accuracies)
     mean_accuracy = np.mean(accuracies_np)
     variance_accuracy = np.var(accuracies_np)
@@ -426,4 +441,26 @@ def pipeline(
     logger.info(f"All {len(random_seeds)} Top-1 acc: {[f'{acc:.4f}' for acc in top1_accuracies]}")
     logger.info(f"Avg Top-1 acc: {mean_accuracy:.4f}")
     logger.info(f"Variance of Top-1 acc: {variance_accuracy:.6f}")
+
+    # ---- persist pipeline record ----
+    reader_name = readers.get_reader_class(dataset_name).__name__
+    if resolved_pipeline_steps is None:
+        proc_type = "BaseProcessor"
+        proc_steps = {"phase_calibration": "default", "wavelet_denoise_csi": "default"}
+    else:
+        proc_type = "ConfigurableProcessor"
+        proc_steps = resolved_pipeline_steps
+    model_str = f"custom:{model_path}" if model_path is not None else model_name
+
+    persist_pipeline_record(
+        output_folder=output_folder,
+        dataset=dataset_name,
+        total_samples=len(processed_data),
+        reader_name=reader_name,
+        processor_type=proc_type,
+        processor_steps=proc_steps,
+        model=model_str,
+        seed_records=seed_records,
+    )
+
     logger.info("All pipeline complete")
