@@ -2,11 +2,13 @@
 """
 Manual integration runner.
 
-Runs four datasets through four execution paths:
+Runs four datasets through six execution paths:
 1. pipeline direct call without optional model/preset arguments
 2. pipeline direct call with model and algorithm preset arguments
 3. CLI call without optional model/preset arguments
 4. CLI call with model and algorithm preset arguments
+5. pipeline direct call with YAML algorithm config
+6. CLI call with YAML algorithm config
 
 This file is intentionally a script, not a pytest unit test. Run it manually:
     python test_tools/run_integration_tests.py
@@ -14,6 +16,7 @@ This file is intentionally a script, not a pytest unit test. Run it manually:
 Any failure is allowed to raise directly so the user can inspect and handle it.
 """
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -33,6 +36,8 @@ DATA_ROOT = "./data"
 OUTPUT_ROOT = "./test_script_output"
 MODEL_NAME = "cnn1dmodel"
 ALGORITHM_PRESET = "robust"
+ALGORITHM_CONFIG = "test_tools/yaml_algorithm_config.yaml"
+YAML_EXPECTED_MODULES = ["denoise:wavelet", "calibrate:linear", "normalize:z-score"]
 NUM_EPOCHS = 3
 NUM_SEEDS = 2
 TIMEOUT_SECONDS = 600
@@ -59,6 +64,7 @@ def _validate_env() -> None:
 
     print(f"[INFO] Model: {MODEL_NAME}")
     print(f"[INFO] Preset: {ALGORITHM_PRESET}")
+    print(f"[INFO] Algorithm config: {ALGORITHM_CONFIG}")
     print(f"[INFO] Data root: {DATA_ROOT}")
     print(f"[INFO] Output root: {OUTPUT_ROOT}")
     print(f"[INFO] Epochs: {NUM_EPOCHS}")
@@ -160,6 +166,55 @@ def _run_cli_with_options(dataset: str, output_dir: str) -> None:
     )
 
 
+def _assert_yaml_record(output_dir: str) -> None:
+    record_path = Path(output_dir) / "pipeline_record.json"
+    if not record_path.exists():
+        raise FileNotFoundError(f"missing pipeline_record.json in {output_dir}")
+    with open(record_path, "r", encoding="utf-8") as f:
+        record = json.load(f)
+    if record.get("processor_type") != "ConfigurableProcessor":
+        raise AssertionError(f"expected ConfigurableProcessor, got {record!r}")
+    if record.get("algorithm_modules") != YAML_EXPECTED_MODULES:
+        raise AssertionError(
+            f"expected algorithm_modules {YAML_EXPECTED_MODULES}, got {record!r}"
+        )
+
+
+def _run_pipeline_yaml(dataset: str, output_dir: str) -> None:
+    from wsdp import pipeline
+
+    pipeline(
+        input_path=_dataset_path(dataset),
+        output_folder=output_dir,
+        dataset=dataset,
+        algorithm_config_file=ALGORITHM_CONFIG,
+        num_epochs=NUM_EPOCHS,
+        num_seeds=NUM_SEEDS,
+        use_cache=True,
+    )
+    _assert_yaml_record(output_dir)
+
+
+def _run_cli_yaml(dataset: str, output_dir: str) -> None:
+    argv = [
+        "wsdp",
+        "run",
+        _dataset_path(dataset),
+        output_dir,
+        dataset,
+        "--algorithm-config",
+        ALGORITHM_CONFIG,
+        "--epochs",
+        str(NUM_EPOCHS),
+    ]
+    subprocess.run(
+        [sys.executable, "-c", _build_cli_subprocess_code(argv)],
+        check=True,
+        timeout=TIMEOUT_SECONDS,
+    )
+    _assert_yaml_record(output_dir)
+
+
 def main() -> None:
     _validate_env()
     Path(OUTPUT_ROOT).mkdir(parents=True, exist_ok=True)
@@ -169,6 +224,8 @@ def main() -> None:
         ("pipeline_options", _run_pipeline_with_options),
         ("cli_basic", _run_cli_basic),
         ("cli_options", _run_cli_with_options),
+        ("pipeline_yaml", _run_pipeline_yaml),
+        ("cli_yaml", _run_cli_yaml),
     ]
 
     total = len(DATASETS) * len(test_plan)

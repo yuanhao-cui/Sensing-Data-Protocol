@@ -112,9 +112,18 @@ def persist_pipeline_record(
 
 
 def algorithm_modules_from_steps(processor_steps: Optional[Dict[str, Any]]) -> List[str]:
-    """Return configured algorithm module names without parameter values."""
+    """Return configured algorithm module names with their method, e.g. denoise:butterworth."""
     if processor_steps is None:
         return []
     ordered = [name for name in CONFIGURABLE_ALGORITHM_ORDER if name in processor_steps]
     extras = [name for name in processor_steps if name not in ordered]
-    return ordered + extras
+
+    def _format(name: str) -> str:
+        step = processor_steps.get(name)
+        if isinstance(step, dict):
+            method = step.get("method")
+            if method:
+                return f"{name}:{method}"
+        return name
+
+    return [_format(name) for name in ordered + extras]
