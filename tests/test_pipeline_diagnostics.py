@@ -134,7 +134,7 @@ def test_run_pipeline_diagnostics_appends_metrics_and_manifest_samples(tmp_path)
     assert (tmp_path / "sample_b_diagnostic.png").exists()
 
 
-def test_plot_pipeline_diagnostics_uses_shared_raw_processed_scales(tmp_path):
+def test_plot_pipeline_diagnostics_uses_independent_raw_processed_scales(tmp_path):
     from wsdp.diagnostics import plot_pipeline_diagnostics
 
     raw = _synthetic_motion_csi(T=64, F=8, A=1)
@@ -144,8 +144,31 @@ def test_plot_pipeline_diagnostics_uses_shared_raw_processed_scales(tmp_path):
     fig = plot_pipeline_diagnostics(raw, processed, output, include_doppler=True, n_fft=32, hop_length=16)
 
     image_axes = [ax for ax in fig.axes if ax.images]
-    assert image_axes[0].images[0].get_clim() == image_axes[1].images[0].get_clim()
-    assert image_axes[4].images[0].get_clim() == image_axes[5].images[0].get_clim()
+    # Raw and processed amplitude panels must auto-scale independently so
+    # normalization does not collapse to a single color.
+    assert image_axes[0].images[0].get_clim() != image_axes[1].images[0].get_clim()
+    assert image_axes[4].images[0].get_clim() != image_axes[5].images[0].get_clim()
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+
+
+def test_plot_pipeline_diagnostics_shows_normalized_processed_data(tmp_path):
+    from wsdp.diagnostics import plot_pipeline_diagnostics
+
+    raw = np.abs(_synthetic_motion_csi(T=64, F=8, A=1)) * 100.0
+    processed = (raw - np.mean(raw, axis=0, keepdims=True)) / (
+        np.std(raw, axis=0, keepdims=True) + 1e-12
+    )
+    output = tmp_path / "panel.png"
+
+    fig = plot_pipeline_diagnostics(raw, processed, output, include_doppler=True, n_fft=32, hop_length=16)
+    assert output.exists()
+
+    image_axes = [ax for ax in fig.axes if ax.images]
+    raw_clim = image_axes[0].images[0].get_clim()
+    proc_clim = image_axes[1].images[0].get_clim()
+    # Normalized output should have a much smaller value range than raw.
+    assert (proc_clim[1] - proc_clim[0]) < (raw_clim[1] - raw_clim[0]) * 0.5
     import matplotlib.pyplot as plt
     plt.close(fig)
 

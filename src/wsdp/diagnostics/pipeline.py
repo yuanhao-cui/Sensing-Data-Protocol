@@ -121,16 +121,6 @@ def _antenna_slice(csi: np.ndarray, antenna_idx: int) -> np.ndarray:
     return csi[:, :, antenna_idx]
 
 
-def _shared_limits(*arrays: np.ndarray) -> Tuple[float, float]:
-    values = [np.asarray(array) for array in arrays]
-    vmin = float(min(np.min(value) for value in values))
-    vmax = float(max(np.max(value) for value in values))
-    if np.isclose(vmin, vmax):
-        eps = max(abs(vmin), 1.0) * 1e-12
-        return vmin - eps, vmax + eps
-    return vmin, vmax
-
-
 def _plot_heatmap(
     ax,
     data: np.ndarray,
@@ -140,13 +130,27 @@ def _plot_heatmap(
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
 ):
+    arr = np.asarray(data, dtype=float)
+    # Replace non-finite values so imshow always renders a visible image
+    # even when the upstream pipeline emits NaN/Inf.
+    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+
     kwargs = {"aspect": "auto", "origin": "lower", "cmap": cmap}
     if center:
-        centered_vmax = float(np.max(np.abs(data))) + 1e-12
+        centered_vmax = float(np.max(np.abs(arr))) + 1e-12
         kwargs.update({"vmin": -centered_vmax, "vmax": centered_vmax})
     elif vmin is not None and vmax is not None:
         kwargs.update({"vmin": vmin, "vmax": vmax})
-    im = ax.imshow(data.T, **kwargs)
+    else:
+        data_min = float(np.min(arr))
+        data_max = float(np.max(arr))
+        if np.isclose(data_min, data_max):
+            eps = max(abs(data_min), 1.0) * 1e-12
+            data_min -= eps
+            data_max += eps
+        kwargs.update({"vmin": data_min, "vmax": data_max})
+
+    im = ax.imshow(arr.T, **kwargs)
     ax.set_title(title)
     ax.set_xlabel("Time")
     ax.set_ylabel("Subcarrier")
@@ -205,7 +209,10 @@ def plot_pipeline_diagnostics(
     processed_view = _antenna_slice(processed_arr, antenna_idx)
     raw_amplitude = np.abs(raw_view)
     processed_amplitude = np.abs(processed_view)
-    amp_vmin, amp_vmax = _shared_limits(raw_amplitude, processed_amplitude)
+    # Use independent color limits per panel. If the processed CSI has been
+    # normalized (z-score, min-max, etc.) its amplitude range can be orders of
+    # magnitude smaller than the raw CSI; sharing a single scale would make the
+    # processed panel appear uniformly black.
 
     if include_doppler:
         figsize = figsize or (15, 8)
@@ -219,8 +226,8 @@ def plot_pipeline_diagnostics(
         axes = [fig.add_subplot(gs[i, j]) for i in range(2) for j in range(2)]
 
     panels = [
-        (raw_amplitude, "Raw Amplitude", "viridis", False, amp_vmin, amp_vmax),
-        (processed_amplitude, "Processed Amplitude", "viridis", False, amp_vmin, amp_vmax),
+        (raw_amplitude, "Raw Amplitude", "viridis", False, None, None),
+        (processed_amplitude, "Processed Amplitude", "viridis", False, None, None),
         (processed_amplitude - raw_amplitude, "Amplitude Difference", "RdBu_r", True, None, None),
         (np.angle(processed_view * np.conj(raw_view)), "Phase Difference", "twilight", False, None, None),
     ]
@@ -232,18 +239,25 @@ def plot_pipeline_diagnostics(
     if include_doppler:
         raw_doppler = _doppler_summary(raw_arr, n_fft=n_fft, hop_length=hop_length)
         processed_doppler = _doppler_summary(processed_arr, n_fft=n_fft, hop_length=hop_length)
-        doppler_vmin, doppler_vmax = _shared_limits(raw_doppler, processed_doppler)
         for ax, data, title in (
             (axes[4], raw_doppler, "Raw Doppler Summary"),
             (axes[5], processed_doppler, "Processed Doppler Summary"),
         ):
+            arr = np.asarray(data, dtype=float)
+            arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+            data_min = float(np.min(arr))
+            data_max = float(np.max(arr))
+            if np.isclose(data_min, data_max):
+                eps = max(abs(data_min), 1.0) * 1e-12
+                data_min -= eps
+                data_max += eps
             im = ax.imshow(
-                data,
+                arr,
                 aspect="auto",
                 origin="lower",
                 cmap="magma",
-                vmin=doppler_vmin,
-                vmax=doppler_vmax,
+                vmin=data_min,
+                vmax=data_max,
             )
             ax.set_title(title)
             ax.set_xlabel("STFT Frame")
