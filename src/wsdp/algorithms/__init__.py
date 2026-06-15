@@ -50,7 +50,9 @@ from .visualization import (
     plot_phase_calibration,
 )
 from wsdp.diagnostics import (
+    compare_pipeline_candidates,
     compute_pipeline_metrics,
+    compute_phase_diagnostics,
     plot_pipeline_diagnostics,
     run_pipeline_diagnostics,
 )
@@ -279,7 +281,9 @@ __all__ = [
     "plot_csi_heatmap",
     "plot_denoising_comparison",
     "plot_phase_calibration",
+    "compare_pipeline_candidates",
     "compute_pipeline_metrics",
+    "compute_phase_diagnostics",
     "plot_pipeline_diagnostics",
     "run_pipeline_diagnostics",
     # Unified API
