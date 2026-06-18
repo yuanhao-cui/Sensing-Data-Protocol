@@ -60,8 +60,10 @@ def get_all_reader_metadata(dataset: str) -> dict:
 def _validate_input_dir(file_path: str) -> Path:
     """Return a valid input directory path or raise the historical error."""
     input_path = Path(file_path)
+
     if not input_path.exists() or not input_path.is_dir():
         raise ValueError(f"invalid file path: {input_path}")
+
     return input_path
 
 
@@ -86,7 +88,9 @@ def _process_file(reader, file_path):
         # Sniff: skip files that don't match this reader's format
         if not reader.sniff(str(file_path)):
             return file_path.name, None, "format_mismatch"
+
         data = reader.read_file(str(file_path))
+
         return file_path.name, data, None
     except Exception as e:
         return file_path.name, None, str(e)
@@ -95,6 +99,7 @@ def _process_file(reader, file_path):
 def load_data(file_path: str, dataset: str) -> List[CSIData]:
     input_path = _validate_input_dir(file_path)
     files = _collect_data_files(input_path)
+
     if not files:
         raise IOError(f"no file in folder: {input_path}")
 
@@ -103,10 +108,13 @@ def load_data(file_path: str, dataset: str) -> List[CSIData]:
     csi_data_list = []
     skipped = 0
 
+    # Fan out independent file reads while preserving per-file error reporting.
     with ProcessPoolExecutor(max_workers=16) as executor:
         futures = {executor.submit(_process_file, reader, file_path): file_path for file_path in files}
+
         for future in as_completed(futures):
             file_name, data, err = future.result()
+
             if err is None:
                 _extend_csi_data(csi_data_list, data)
                 print(f"√ processed: {file_name}\n")

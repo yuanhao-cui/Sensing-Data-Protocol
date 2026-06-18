@@ -42,9 +42,11 @@ def _split_data():
     train_data = np.ones((4, 4, 3, 1), dtype=np.float32)
     val_data = np.ones((2, 4, 3, 1), dtype=np.float32)
     test_data = np.ones((2, 4, 3, 1), dtype=np.float32)
+
     train_labels = np.array([0, 1, 0, 1])
     val_labels = np.array([0, 1])
     test_labels = np.array([0, 1])
+
     return train_data, val_data, test_data, train_labels, val_labels, test_labels
 
 
@@ -61,6 +63,7 @@ def test_resolve_pipeline_steps_loads_config_file():
     steps = {"calibrate": {"method": "stc"}}
     with patch("wsdp.core.load_algorithm_config", return_value=steps) as load_config:
         assert _resolve_pipeline_steps(algorithm_config_file="algorithms.yaml") == steps
+
     load_config.assert_called_once_with("algorithms.yaml")
 
 
@@ -113,6 +116,7 @@ def test_load_or_preprocess_data_uses_cache_hit(tmp_path):
     input_dir = tmp_path / "input"
     input_dir.mkdir()
     (input_dir / "sample.dat").write_text("sample")
+
     cached = {
         "processed_data": np.ones((2, 4, 3, 1), dtype=np.float32),
         "labels": np.array([0, 1]),
@@ -147,6 +151,7 @@ def test_pipeline_uses_registry_model_and_pipeline_steps(tmp_path):
     dummy_model = DummyModel()
     checkpoint = tmp_path / "best_checkpoint_123.pth"
     checkpoint.write_text("placeholder")
+
     processed = (
         np.ones((8, 4, 3, 1), dtype=np.float32),
         np.array([0, 1, 0, 1, 0, 1, 0, 1]),

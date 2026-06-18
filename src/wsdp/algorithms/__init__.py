@@ -74,15 +74,18 @@ from .registry import (
 
 import inspect
 
+
 def _filter_kwargs(func, kwargs):
     """Filter kwargs to only include those accepted by func."""
     try:
         sig = inspect.signature(func)
         valid_params = set(sig.parameters.keys())
+
         # If **kwargs is present, pass all
         for p in sig.parameters.values():
             if p.kind == inspect.Parameter.VAR_KEYWORD:
                 return kwargs
+
         return {k: v for k, v in kwargs.items() if k in valid_params}
     except (ValueError, TypeError):
         return kwargs
@@ -224,26 +227,32 @@ def extract_features(csi, features=None, **kwargs):
         features = ['doppler']
 
     valid_features = ('doppler', 'entropy', 'ratio', 'decomposition')
+
     for f in features:
         if f not in valid_features:
             raise ValueError(f"Unknown feature '{f}'. Supported: {list(valid_features)}")
 
     result = {}
 
+    # Dispatch feature-specific options while keeping the public API compact.
     for feat in features:
         if feat == 'doppler':
             n_fft = kwargs.get('n_fft', 64)
             hop_length = kwargs.get('hop_length', 32)
+
             result['doppler'] = doppler_spectrum(csi, n_fft=n_fft, hop_length=hop_length)
         elif feat == 'entropy':
             bins = kwargs.get('bins', 50)
+
             result['entropy'] = entropy_features(csi, bins=bins)
         elif feat == 'ratio':
             antenna_pairs = kwargs.get('antenna_pairs', None)
+
             result['ratio'] = csi_ratio(csi, antenna_pairs=antenna_pairs)
         elif feat == 'decomposition':
             rank = kwargs.get('rank', 10)
             method = kwargs.get('method', 'cp')
+
             result['decomposition'] = tensor_decomposition(csi, rank=rank, method=method)
 
     return result

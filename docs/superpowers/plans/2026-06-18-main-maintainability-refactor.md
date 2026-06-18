@@ -117,6 +117,6 @@ Run `pytest` in the worktree virtualenv and read the full output.
 
 Mark RFC 0001 implementation complete in `docs/STATE.md`.
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 3: Commit and push**
 
 Create conventional commits with Problem/Decision/Change bodies and push `refactor/main-maintainability` to `origin`.

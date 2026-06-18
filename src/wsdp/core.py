@@ -98,6 +98,7 @@ def _load_and_preprocess(
         processor = BaseProcessor()
     else:
         processor = ConfigurableProcessor(pipeline_steps)
+
     res = processor.process(csi_data_list, dataset=dataset)
 
     unadjusted_data = res[0]
@@ -107,6 +108,7 @@ def _load_and_preprocess(
     labels = res[1]
     groups = res[2]
 
+    # Normalize labels and groups to stable zero-based integer IDs.
     unique_labels = sorted(list(set(labels)))
     label_map = {label: i for i, label in enumerate(unique_labels)}
     zero_indexed_labels = [label_map[label] for label in labels]
@@ -130,12 +132,16 @@ def _load_and_preprocess(
 def _load_pipeline_params(dataset: str, config_file: Optional[str]) -> Dict[str, Any]:
     """Load dataset defaults and optional YAML overrides."""
     params = load_params(dataset)
+
     if config_file and os.path.exists(config_file):
         with open(config_file, 'r') as f:
             yaml_params = yaml.safe_load(f)
+
         if yaml_params and dataset in yaml_params:
             params.update(yaml_params[dataset])
+
         logger.info(f"Loaded config from {config_file}")
+
     return params
 
 
@@ -156,10 +162,13 @@ def _resolve_pipeline_steps(
     """
     if pipeline_steps is not None:
         return pipeline_steps
+
     if algorithm_config_file is not None:
         return load_algorithm_config(algorithm_config_file)
+
     if algorithm_preset is not None:
         return apply_preset(algorithm_preset)
+
     return None
 
 
@@ -204,16 +213,19 @@ def _load_or_preprocess_data(
     cache_key = None
 
     if use_cache:
+        # Include every preprocessing input that can affect cached output.
         cache_key = get_cache_key(
             input_path,
             dataset,
             padding_length,
             preprocess_config=pipeline_steps,
         )
+
         cached_result = load_cache(cache_dir, cache_key)
         if cached_result is not None:
             logger.info("Cache hit: loaded preprocessed data from cache")
             return _preprocessed_from_cache(cached_result)
+
         logger.info("Cache miss: processing data from scratch")
 
     processed_data, labels, groups, unique_labels = _load_and_preprocess(
@@ -248,11 +260,13 @@ def _create_data_split(
             processed_data, labels,
             test_size=test_split, random_state=seed
         )
+
         test_data, val_data, test_labels, val_labels = train_test_split(
             temp_data, temp_labels,
             test_size=val_split, random_state=seed
         )
     else:
+        # Preserve group boundaries when carving out the held-out split.
         splitter_1 = GroupShuffleSplit(n_splits=1, test_size=test_split, random_state=seed)
         train_idx, temp_idx = next(
             splitter_1.split(processed_data, labels, groups=groups)
@@ -265,6 +279,7 @@ def _create_data_split(
         temp_labels = labels[temp_idx]
         temp_groups = groups[temp_idx]
 
+        # Split held-out groups again to keep test and validation disjoint.
         splitter_2 = GroupShuffleSplit(n_splits=1, test_size=val_split, random_state=seed)
         test_idx, val_idx = next(splitter_2.split(temp_data, temp_labels, groups=temp_groups))
 
@@ -291,15 +306,17 @@ def _create_split_bundle(
     use_simple_split: bool,
 ) -> DataSplitBundle:
     """Create a named train/validation/test split for one seed."""
-    return DataSplitBundle(*_create_data_split(
-        processed_data,
-        labels,
-        groups,
-        test_split,
-        val_split,
-        seed,
-        use_simple_split,
-    ))
+    return DataSplitBundle(
+        *_create_data_split(
+            processed_data,
+            labels,
+            groups,
+            test_split,
+            val_split,
+            seed,
+            use_simple_split,
+        )
+    )
 
 
 def _create_loaders(
@@ -311,6 +328,7 @@ def _create_loaders(
     train_dataset = CSIDataset(split.train_data, split.train_labels)
     test_dataset = CSIDataset(split.test_data, split.test_labels)
     val_dataset = CSIDataset(split.val_data, split.val_labels)
+
     return LoaderBundle(
         train=DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True),
         test=DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False),
@@ -333,6 +351,7 @@ def _create_pipeline_model(
             input_shape=input_shape,
             **model_kwargs,
         )
+
     return load_custom_model(
         model_path,
         num_classes,
@@ -380,7 +399,9 @@ def _seed_record_from_history(
         train_acc = training_history['train_acc'][-1] / 100.0
     else:
         train_acc = 0.0
+
     val_acc = checkpoint.get('best_val_acc', 0.0) / 100.0
+
     return SeedRecord(
         seed=seed,
         train_acc=train_acc,
@@ -475,6 +496,8 @@ def _run_seed_training(
     checkpoint_path = output_path / f"best_checkpoint_{current_seed}.pth"
 
     logger.info("begin training")
+
+    # Train with a per-seed checkpoint so evaluation always uses the best epoch.
     training_history = train_model(
         model=model,
         criterion=criterion,
@@ -495,12 +518,14 @@ def _run_seed_training(
     checkpoint = _load_best_checkpoint(checkpoint_path, device)
     model.load_state_dict(checkpoint['model_state_dict'])
 
+    # Keep evaluation outputs together because they feed logs, plots, and records.
     all_predictions, all_labels, current_top1_acc = _evaluate_model(model, loaders.test, device)
     logger.info("eval complete")
     logger.info(f"Top-1 acc of current epoch: {current_top1_acc:.4f}")
     logger.info("classification report:\n" + classification_report(all_labels, all_predictions))
 
     _plot_confusion_matrix(all_labels, all_predictions, output_path, current_seed)
+
     return SeedRunResult(
         top1_accuracy=current_top1_acc,
         record=_seed_record_from_history(
@@ -526,6 +551,7 @@ def _processor_record(pipeline_steps: Optional[Dict[str, Dict[str, Any]]]) -> Tu
     """Return processor metadata persisted in the pipeline record."""
     if pipeline_steps is None:
         return "BaseProcessor", {"phase_calibration": "default", "wavelet_denoise_csi": "default"}
+
     return "ConfigurableProcessor", pipeline_steps
 
 
@@ -541,6 +567,7 @@ def _persist_pipeline_summary(
     """Persist the aggregate JSON record for a pipeline run."""
     processor_type, processor_steps = _processor_record(pipeline_steps)
     model_str = f"custom:{model_path}" if model_path is not None else model_name
+
     persist_pipeline_record(
         output_folder=output_folder,
         dataset=dataset,
@@ -611,6 +638,8 @@ def pipeline(
     effective_num_workers = _effective_num_workers(num_workers)
 
     model_kwargs = model_kwargs or {}
+
+    # Resolve all runtime configuration before touching input data.
     resolved_pipeline_steps = _resolve_pipeline_steps(
         pipeline_steps=pipeline_steps,
         algorithm_config_file=algorithm_config_file,
@@ -641,6 +670,7 @@ def pipeline(
         num_epochs=num_epochs,
         padding_length=padding_length,
     )
+
     pad_len = hyperparameters.padding_length
 
     random_seeds = [random.randint(0, 999) for _ in range(num_seeds)]
@@ -652,7 +682,7 @@ def pipeline(
         f"epochs={hyperparameters.num_epochs}, pad={pad_len}"
     )
 
-    # begin to preprocess, training and eval
+    # Load preprocessing output once, then reuse it across all seed runs.
     preprocessed = _load_or_preprocess_data(
         input_path=ipath,
         output_folder=output_folder,
@@ -662,7 +692,6 @@ def pipeline(
         use_cache=use_cache,
     )
     processed_data = preprocessed.processed_data
-    zero_indexed_labels = preprocessed.labels
     zero_indexed_groups = preprocessed.groups
 
     logger.info(f"the following {num_seeds} seeds will be used: {random_seeds}")
@@ -670,7 +699,7 @@ def pipeline(
     top1_accuracies = []
     seed_records = []
 
-    # Check if we have enough groups for GroupShuffleSplit
+    # Fall back when grouped splitting cannot produce train/test/val partitions.
     n_groups = len(set(zero_indexed_groups))
     use_simple_split = n_groups < 3
     if use_simple_split:

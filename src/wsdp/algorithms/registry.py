@@ -139,6 +139,7 @@ def _available_algorithms(category: str) -> Dict[str, str]:
     result = {}
     result.update(_ALGORITHM_REGISTRY.get(category, {}))
     result.update(_custom_algorithm_refs(category))
+
     return result
 
 
@@ -174,6 +175,7 @@ def register_algorithm(
     """
     if category not in _custom_algorithms:
         _custom_algorithms[category] = {}
+
     _custom_algorithms[category][name] = func
 
 
@@ -204,6 +206,7 @@ def unregister_algorithm(category: str, name: str) -> bool:
     if category in _custom_algorithms and name in _custom_algorithms[category]:
         del _custom_algorithms[category][name]
         return True
+
     return False
 
 
@@ -236,7 +239,7 @@ def get_algorithm(category: str, name: str) -> Callable:
         ref = _ALGORITHM_REGISTRY[category][name]
         return _resolve_algorithm(ref)
 
-    # Build error message with available options
+    # Build an actionable error message with currently available options.
     available = list_algorithms(category) if _category_exists(category) else {}
     raise ValueError(
         f"Unknown algorithm '{name}' in category '{category}'. "
@@ -283,8 +286,10 @@ def is_registered(category: str, name: str) -> bool:
     """
     if category in _custom_algorithms and name in _custom_algorithms[category]:
         return True
+
     if category in _ALGORITHM_REGISTRY and name in _ALGORITHM_REGISTRY[category]:
         return True
+
     return False
 
 
@@ -348,6 +353,7 @@ def register_preset(name: str, steps: Dict[str, Dict[str, Any]]) -> None:
             raise ValueError(
                 f"Preset step '{category}' must include 'method' key. Got: {params}"
             )
+
     PRESETS[name] = steps
 
 
@@ -429,6 +435,7 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
             method = params.pop('method')
             func = get_algorithm(category, method)
 
+            # Terminal categories change the payload type for downstream consumers.
             if category == 'extract_features':
                 # extract_features returns a dict
                 features_result = func(result, **params)
@@ -458,11 +465,14 @@ def _load_raw_config(config_path: Path) -> Dict[str, Any]:
                 "PyYAML is required for YAML config files. "
                 "Install with: pip install pyyaml"
             )
+
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
+
     if suffix == '.json':
         with open(config_path, 'r') as f:
             return json.load(f)
+
     raise ValueError(
         f"Unsupported config format '{suffix}'. "
         f"Supported: .yaml, .yml, .json"
@@ -486,6 +496,7 @@ def _parse_step_config(category: str, config: Dict[str, Any]) -> Dict[str, Any]:
         params = config['params'] or {}
     else:
         params = {k: v for k, v in config.items() if k != 'method'}
+
     return {'method': method, **params}
 
 
@@ -498,6 +509,7 @@ def _config_output_payload(steps: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[s
         output[category] = {'method': method}
         if step_params:
             output[category]['params'] = step_params
+
     return output
 
 
@@ -566,18 +578,23 @@ def _parse_config(raw_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     if 'preset' in raw_config:
         preset_name = raw_config['preset']
         steps = apply_preset(preset_name)
-        # Allow overrides
+
+        # Start from the preset, then let explicit category blocks override it.
         overrides = {k: v for k, v in raw_config.items()
                      if k not in ('preset',) and isinstance(v, dict)}
         steps.update(overrides)
+
         return steps
 
     steps = {}
+
     for category, config in raw_config.items():
         if category not in CONFIG_CATEGORIES:
             # Skip unknown keys silently (could be metadata)
             continue
+
         steps[category] = _parse_step_config(category, config)
+
     return steps
 
 
@@ -603,11 +620,13 @@ def save_config(
 
     output = _config_output_payload(steps)
 
+    # Keep YAML as the default while preserving JSON round-trips for callers.
     if format == 'yaml':
         try:
             import yaml
         except ImportError:
             raise ImportError("PyYAML required: pip install pyyaml")
+
         with open(config_path, 'w') as f:
             yaml.dump(output, f, default_flow_style=False, sort_keys=False)
     elif format == 'json':

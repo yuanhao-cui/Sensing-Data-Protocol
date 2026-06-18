@@ -1,7 +1,10 @@
 """Tests for reader modules."""
+
 import os
+
 import numpy as np
 import pytest
+
 from wsdp.readers import (
     list_datasets, get_reader_class, get_all_reader_metadata,
     _collect_data_files, _extend_csi_data,
@@ -28,8 +31,10 @@ class TestReaderRegistry:
     def test_get_reader_class_valid(self):
         cls = get_reader_class("widar")
         assert cls is BfeeReader
+
         cls = get_reader_class("gait")
         assert cls is BfeeReader
+
         cls = get_reader_class("xrf55")
         assert cls is XrfReader
 

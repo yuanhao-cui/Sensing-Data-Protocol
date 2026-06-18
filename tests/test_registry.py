@@ -1,7 +1,9 @@
 """Tests for the WSDP algorithm registry — pluggable architecture."""
+
 import json
 import tempfile
 from pathlib import Path
+
 import numpy as np
 import pytest
 import sys
@@ -100,15 +102,18 @@ class TestCustomAlgorithms:
             return csi * strength
 
         register_algorithm('denoise', 'my_test_method', my_denoise)
+
         assert is_registered('denoise', 'my_test_method')
 
         # Use via unified API
         result = denoise(csi_complex, method='my_test_method', strength=0.5)
         expected = csi_complex * 0.5
+
         np.testing.assert_allclose(result, expected)
 
         # Cleanup
         unregister_algorithm('denoise', 'my_test_method')
+
         assert not is_registered('denoise', 'my_test_method')
 
     def test_register_custom_calibrate(self, csi_complex):
@@ -133,6 +138,7 @@ class TestCustomAlgorithms:
 
         # Should now get custom version (custom takes priority)
         result = denoise(csi_complex, method='wavelet')
+
         np.testing.assert_allclose(result, csi_complex * 0.99)
 
         # Cleanup - custom is in _custom_algorithms, so can remove it
@@ -141,7 +147,9 @@ class TestCustomAlgorithms:
 
         # After cleanup, should get built-in again
         result2 = denoise(csi_complex, method='wavelet')
+
         assert result2.shape == csi_complex.shape
+
         # Should NOT be 0.99 * csi anymore
         assert not np.allclose(result2, csi_complex * 0.99)
 
@@ -257,6 +265,7 @@ preset: high_quality
             loaded = load_config(f.name)
 
         os.unlink(f.name)
+
         assert loaded['denoise']['method'] == 'butterworth'
 
     def test_save_config_json(self):
@@ -271,6 +280,7 @@ preset: high_quality
                 loaded_raw = json.load(rf)
 
         os.unlink(f.name)
+
         assert loaded_raw['denoise']['method'] == 'savgol'
         assert loaded_raw['denoise']['params']['window_length'] == 7
 
@@ -314,7 +324,9 @@ class TestPresets:
             'denoise': {'method': 'wavelet'},
             'calibrate': {'method': 'linear'},
         })
+
         steps = apply_preset('my_custom')
+
         assert steps['denoise']['method'] == 'wavelet'
 
         # Cleanup
@@ -367,6 +379,7 @@ class TestPipelineExecution:
             'denoise': {'method': 'simple', 'factor': 0.5},
         }
         result = execute_pipeline(csi_complex, steps)
+
         np.testing.assert_allclose(result, csi_complex * 0.5)
 
         unregister_algorithm('denoise', 'simple')
