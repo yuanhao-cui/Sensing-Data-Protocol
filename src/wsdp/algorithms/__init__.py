@@ -88,6 +88,11 @@ def _filter_kwargs(func, kwargs):
         return kwargs
 
 
+def _call_algorithm(func, csi, **kwargs):
+    """Invoke an algorithm while dropping kwargs unsupported by its signature."""
+    return func(csi, **_filter_kwargs(func, kwargs))
+
+
 def denoise(csi, method='wavelet', **kwargs):
     """
     Unified denoising interface.
@@ -114,8 +119,7 @@ def denoise(csi, method='wavelet', **kwargs):
         >>> denoise(csi, method='my_method', my_param=42)
     """
     func = get_algorithm('denoise', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, **filtered)
+    return _call_algorithm(func, csi, **kwargs)
 
 
 def calibrate(csi, method='linear', **kwargs):
@@ -142,8 +146,7 @@ def calibrate(csi, method='linear', **kwargs):
         >>> calibrate(csi, method='robust')
     """
     func = get_algorithm('calibrate', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, **filtered)
+    return _call_algorithm(func, csi, **kwargs)
 
 
 def normalize(csi, method='z-score', **kwargs):
@@ -166,8 +169,7 @@ def normalize(csi, method='z-score', **kwargs):
         >>> normalize(csi, method='min-max')
     """
     func = get_algorithm('normalize', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, method=method, **filtered)
+    return _call_algorithm(func, csi, method=method, **kwargs)
 
 
 def interpolate(csi, target_K=30, method='cubic', **kwargs):
@@ -191,11 +193,7 @@ def interpolate(csi, target_K=30, method='cubic', **kwargs):
         >>> interpolate(csi, target_K=15, method='linear')
     """
     func = get_algorithm('interpolate', method)
-    filtered = _filter_kwargs(func, kwargs)
-    sig = inspect.signature(func)
-    if 'method' in sig.parameters:
-        return func(csi, target_K=target_K, method=method, **filtered)
-    return func(csi, target_K=target_K, **filtered)
+    return _call_algorithm(func, csi, target_K=target_K, method=method, **kwargs)
 
 
 def extract_features(csi, features=None, **kwargs):
@@ -280,6 +278,7 @@ __all__ = [
     "normalize",
     "interpolate",
     "extract_features",
+    "_call_algorithm",
     # Registry / Pluggable Architecture
     "register_algorithm",
     "unregister_algorithm",

@@ -6,7 +6,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from wsdp.core import _resolve_pipeline_steps, pipeline
+from wsdp.core import (
+    PreprocessedData,
+    _load_or_preprocess_data,
+    _resolve_hyperparameters,
+    _resolve_pipeline_steps,
+    pipeline,
+)
 from wsdp.utils.cache import get_cache_key
 
 
@@ -76,6 +82,64 @@ def test_cache_key_includes_preprocess_config(tmp_path):
     )
 
     assert wavelet_key != butterworth_key
+
+
+def test_resolve_hyperparameters_prefers_explicit_over_config():
+    params = {
+        "batch": 32,
+        "lr": 0.001,
+        "wd": 0.01,
+        "num_epochs": 20,
+        "padding_length": 1500,
+    }
+
+    resolved = _resolve_hyperparameters(
+        params,
+        batch_size=8,
+        learning_rate=0.002,
+        weight_decay=None,
+        num_epochs=3,
+        padding_length=None,
+    )
+
+    assert resolved.batch_size == 8
+    assert resolved.learning_rate == 0.002
+    assert resolved.weight_decay == 0.01
+    assert resolved.num_epochs == 3
+    assert resolved.padding_length == 1500
+
+
+def test_load_or_preprocess_data_uses_cache_hit(tmp_path):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "sample.dat").write_text("sample")
+    cached = {
+        "processed_data": np.ones((2, 4, 3, 1), dtype=np.float32),
+        "labels": np.array([0, 1]),
+        "groups": np.array([0, 1]),
+        "unique_labels": [10, 20],
+    }
+
+    with patch("wsdp.core.load_cache", return_value=cached) as load_cached, \
+            patch("wsdp.core._load_and_preprocess") as load_preprocess, \
+            patch("wsdp.core.save_cache") as save_cached:
+        result = _load_or_preprocess_data(
+            input_path=str(input_dir),
+            output_folder=str(tmp_path),
+            dataset="xrf55",
+            padding_length=4,
+            pipeline_steps={"denoise": {"method": "wavelet"}},
+            use_cache=True,
+        )
+
+    assert isinstance(result, PreprocessedData)
+    np.testing.assert_array_equal(result.processed_data, cached["processed_data"])
+    np.testing.assert_array_equal(result.labels, cached["labels"])
+    np.testing.assert_array_equal(result.groups, cached["groups"])
+    assert result.unique_labels == [10, 20]
+    load_cached.assert_called_once()
+    load_preprocess.assert_not_called()
+    save_cached.assert_not_called()
 
 
 def test_pipeline_uses_registry_model_and_pipeline_steps(tmp_path):

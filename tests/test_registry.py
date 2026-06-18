@@ -30,6 +30,7 @@ from wsdp.algorithms import (
     normalize,
     interpolate,
     extract_features,
+    _call_algorithm,
 )
 from wsdp.algorithms.registry import _custom_algorithms
 
@@ -375,6 +376,14 @@ class TestPipelineExecution:
 # Integration: Registry + Unified API Tests
 # ============================================================================
 class TestRegistryIntegration:
+    def test_call_algorithm_filters_unsupported_kwargs(self, csi_complex):
+        def scale_only(csi, scale=1.0):
+            return csi * scale
+
+        result = _call_algorithm(scale_only, csi_complex, scale=0.5, ignored=True)
+
+        np.testing.assert_allclose(result, csi_complex * 0.5)
+
     def test_denose_via_registry(self, csi_complex):
         """denoise() should resolve through registry."""
         result = denoise(csi_complex, method='butterworth', order=4, cutoff=0.3)

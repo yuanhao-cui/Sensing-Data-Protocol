@@ -89,6 +89,18 @@ _ALGORITHM_REGISTRY: Dict[str, Dict[str, str]] = {
 _custom_algorithms: Dict[str, Dict[str, Callable]] = {}
 
 
+CONFIG_CATEGORIES = frozenset(_ALGORITHM_REGISTRY.keys())
+EXECUTION_ORDER = (
+    'denoise',
+    'outliers',
+    'calibrate',
+    'normalize',
+    'interpolate',
+    'extract_features',
+    'detect',
+)
+
+
 # ============================================================================
 # Core Registry Functions
 # ============================================================================
@@ -100,13 +112,34 @@ def _resolve_algorithm(ref: str) -> Callable:
     return getattr(module, func_name)
 
 
+def _category_exists(category: str) -> bool:
+    """Return True when a category has built-in or custom algorithms."""
+    return category in _ALGORITHM_REGISTRY or category in _custom_algorithms
+
+
 def _ensure_category(category: str) -> None:
     """Ensure a category exists in the registry."""
-    if category not in _ALGORITHM_REGISTRY and category not in _custom_algorithms:
+    if not _category_exists(category):
         raise ValueError(
             f"Unknown algorithm category '{category}'. "
             f"Available: {list_algorithms().keys()}"
         )
+
+
+def _custom_algorithm_refs(category: str) -> Dict[str, str]:
+    """Return display references for custom algorithms in one category."""
+    return {
+        name: f"{func.__module__}:{func.__name__}"
+        for name, func in _custom_algorithms.get(category, {}).items()
+    }
+
+
+def _available_algorithms(category: str) -> Dict[str, str]:
+    """Return built-in and custom algorithm references for one category."""
+    result = {}
+    result.update(_ALGORITHM_REGISTRY.get(category, {}))
+    result.update(_custom_algorithm_refs(category))
+    return result
 
 
 def register_algorithm(
@@ -204,7 +237,7 @@ def get_algorithm(category: str, name: str) -> Callable:
         return _resolve_algorithm(ref)
 
     # Build error message with available options
-    available = list_algorithms(category) if category in _ALGORITHM_REGISTRY or category in _custom_algorithms else {}
+    available = list_algorithms(category) if _category_exists(category) else {}
     raise ValueError(
         f"Unknown algorithm '{name}' in category '{category}'. "
         f"Available: {list(available.keys())}"
@@ -231,21 +264,10 @@ def list_algorithms(category: Optional[str] = None) -> Dict[str, Any]:
         {'wavelet': 'wsdp.algorithms.denoising:wavelet_denoise_csi', ...}
     """
     if category is not None:
-        result = {}
-        if category in _ALGORITHM_REGISTRY:
-            result.update(_ALGORITHM_REGISTRY[category])
-        if category in _custom_algorithms:
-            for name, func in _custom_algorithms[category].items():
-                result[name] = f"{func.__module__}:{func.__name__}"
-        return result
+        return _available_algorithms(category)
 
-    # Return all categories
     all_categories = set(_ALGORITHM_REGISTRY.keys()) | set(_custom_algorithms.keys())
-    result = {}
-    for cat in sorted(all_categories):
-        cat_algos = list_algorithms(cat)
-        result[cat] = list(cat_algos.keys())
-    return result
+    return {cat: list(list_algorithms(cat).keys()) for cat in sorted(all_categories)}
 
 
 def is_registered(category: str, name: str) -> bool:
@@ -401,11 +423,7 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
 
     result = csi.copy()
 
-    # Define execution order
-    order = ['denoise', 'outliers', 'calibrate', 'normalize', 'interpolate',
-             'extract_features', 'detect']
-
-    for category in order:
+    for category in EXECUTION_ORDER:
         if category in steps:
             params = steps[category].copy()
             method = params.pop('method')
@@ -428,6 +446,60 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
 # ============================================================================
 # Configuration File Support
 # ============================================================================
+
+def _load_raw_config(config_path: Path) -> Dict[str, Any]:
+    """Read a YAML or JSON config file into a raw dictionary."""
+    suffix = config_path.suffix.lower()
+    if suffix in ('.yaml', '.yml'):
+        try:
+            import yaml
+        except ImportError:
+            raise ImportError(
+                "PyYAML is required for YAML config files. "
+                "Install with: pip install pyyaml"
+            )
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    if suffix == '.json':
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    raise ValueError(
+        f"Unsupported config format '{suffix}'. "
+        f"Supported: .yaml, .yml, .json"
+    )
+
+
+def _parse_step_config(category: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize one category config into the internal step format."""
+    if not isinstance(config, dict):
+        raise ValueError(
+            f"Category '{category}' config must be a dict, got {type(config)}"
+        )
+
+    method = config.get('method')
+    if not method:
+        raise ValueError(
+            f"Category '{category}' must specify 'method'. Got: {config}"
+        )
+
+    if 'params' in config:
+        params = config['params'] or {}
+    else:
+        params = {k: v for k, v in config.items() if k != 'method'}
+    return {'method': method, **params}
+
+
+def _config_output_payload(steps: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Convert internal steps into the persisted config file shape."""
+    output = {}
+    for category, params in steps.items():
+        step_params = params.copy()
+        method = step_params.pop('method')
+        output[category] = {'method': method}
+        if step_params:
+            output[category]['params'] = step_params
+    return output
+
 
 def load_config(config_path: Union[str, Path]) -> Dict[str, Dict[str, Any]]:
     """
@@ -482,28 +554,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Dict[str, Any]]:
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    suffix = config_path.suffix.lower()
-
-    if suffix in ('.yaml', '.yml'):
-        try:
-            import yaml
-        except ImportError:
-            raise ImportError(
-                "PyYAML is required for YAML config files. "
-                "Install with: pip install pyyaml"
-            )
-        with open(config_path, 'r') as f:
-            raw_config = yaml.safe_load(f)
-    elif suffix == '.json':
-        with open(config_path, 'r') as f:
-            raw_config = json.load(f)
-    else:
-        raise ValueError(
-            f"Unsupported config format '{suffix}'. "
-            f"Supported: .yaml, .yml, .json"
-        )
-
-    return _parse_config(raw_config)
+    return _parse_config(_load_raw_config(config_path))
 
 
 def _parse_config(raw_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -521,35 +572,12 @@ def _parse_config(raw_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         steps.update(overrides)
         return steps
 
-    # Parse pipeline steps
-    valid_categories = {'denoise', 'calibrate', 'normalize', 'interpolate',
-                        'extract_features', 'detect', 'outliers'}
     steps = {}
-
     for category, config in raw_config.items():
-        if category not in valid_categories:
+        if category not in CONFIG_CATEGORIES:
             # Skip unknown keys silently (could be metadata)
             continue
-
-        if not isinstance(config, dict):
-            raise ValueError(
-                f"Category '{category}' config must be a dict, got {type(config)}"
-            )
-
-        method = config.get('method')
-        if not method:
-            raise ValueError(
-                f"Category '{category}' must specify 'method'. Got: {config}"
-            )
-
-        # Flatten params if nested under 'params' key
-        if 'params' in config:
-            params = config['params'] or {}
-        else:
-            params = {k: v for k, v in config.items() if k != 'method'}
-
-        steps[category] = {'method': method, **params}
-
+        steps[category] = _parse_step_config(category, config)
     return steps
 
 
@@ -573,14 +601,7 @@ def save_config(
     """
     config_path = Path(config_path)
 
-    # Separate method from params
-    output = {}
-    for category, params in steps.items():
-        p = params.copy()
-        method = p.pop('method')
-        output[category] = {'method': method}
-        if p:
-            output[category]['params'] = p
+    output = _config_output_payload(steps)
 
     if format == 'yaml':
         try:

@@ -4,8 +4,10 @@ import numpy as np
 import pytest
 from wsdp.readers import (
     list_datasets, get_reader_class, get_all_reader_metadata,
+    _collect_data_files, _extend_csi_data,
     BfeeReader, XrfReader, ElderReader, ZTEReader,
 )
+from wsdp.structure import CSIData
 
 
 class TestReaderRegistry:
@@ -66,3 +68,29 @@ class TestReaderMetadata:
             meta = get_all_reader_metadata(ds)
             assert "reader" in meta
             assert "format" in meta
+
+
+class TestReaderLoadingHelpers:
+    def test_collect_data_files_excludes_truth_files(self, tmp_path):
+        data_file = tmp_path / "sample.dat"
+        truth_file = tmp_path / "sample_truth.csv"
+        nested_dir = tmp_path / "nested"
+        nested_dir.mkdir()
+        nested_file = nested_dir / "nested.dat"
+        data_file.write_text("data")
+        truth_file.write_text("truth")
+        nested_file.write_text("nested")
+
+        files = _collect_data_files(tmp_path)
+
+        assert set(files) == {data_file, nested_file}
+
+    def test_extend_csi_data_accepts_single_and_list_items(self):
+        target = []
+        first = CSIData("first")
+        second = CSIData("second")
+
+        _extend_csi_data(target, first)
+        _extend_csi_data(target, [second])
+
+        assert target == [first, second]

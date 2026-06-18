@@ -26,8 +26,59 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Any, Dict, Optional, Tuple, Callable
 
 import logging
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Hyperparameters:
+    """Resolved training hyperparameters after config and call-site overrides."""
+
+    batch_size: int
+    learning_rate: float
+    weight_decay: float
+    num_epochs: int
+    padding_length: int
+
+
+@dataclass(frozen=True)
+class PreprocessedData:
+    """CSI arrays and metadata after loading and preprocessing."""
+
+    processed_data: np.ndarray
+    labels: np.ndarray
+    groups: np.ndarray
+    unique_labels: list
+
+
+@dataclass(frozen=True)
+class DataSplitBundle:
+    """Train/validation/test arrays for one random seed."""
+
+    train_data: np.ndarray
+    val_data: np.ndarray
+    test_data: np.ndarray
+    train_labels: np.ndarray
+    val_labels: np.ndarray
+    test_labels: np.ndarray
+
+
+@dataclass(frozen=True)
+class LoaderBundle:
+    """DataLoaders used by one training/evaluation seed."""
+
+    train: DataLoader
+    test: DataLoader
+    val: DataLoader
+
+
+@dataclass(frozen=True)
+class SeedRunResult:
+    """Metrics collected from one random seed run."""
+
+    top1_accuracy: float
+    record: SeedRecord
 
 
 def _load_and_preprocess(
@@ -76,6 +127,23 @@ def _load_and_preprocess(
     return processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels
 
 
+def _load_pipeline_params(dataset: str, config_file: Optional[str]) -> Dict[str, Any]:
+    """Load dataset defaults and optional YAML overrides."""
+    params = load_params(dataset)
+    if config_file and os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            yaml_params = yaml.safe_load(f)
+        if yaml_params and dataset in yaml_params:
+            params.update(yaml_params[dataset])
+        logger.info(f"Loaded config from {config_file}")
+    return params
+
+
+def _effective_num_workers(num_workers: Optional[int]) -> int:
+    """Resolve DataLoader worker count from explicit value or CPU count."""
+    return num_workers if num_workers is not None else min(os.cpu_count() or 1, 8)
+
+
 def _resolve_pipeline_steps(
     pipeline_steps: Optional[Dict[str, Dict[str, Any]]] = None,
     algorithm_config_file: Optional[str] = None,
@@ -93,6 +161,72 @@ def _resolve_pipeline_steps(
     if algorithm_preset is not None:
         return apply_preset(algorithm_preset)
     return None
+
+
+def _resolve_hyperparameters(
+    params: Dict[str, Any],
+    batch_size: Optional[int] = None,
+    learning_rate: Optional[float] = None,
+    weight_decay: Optional[float] = None,
+    num_epochs: Optional[int] = None,
+    padding_length: Optional[int] = None,
+) -> Hyperparameters:
+    """Merge dataset defaults with explicit function-level overrides."""
+    return Hyperparameters(
+        batch_size=batch_size if batch_size is not None else params.get("batch", 32),
+        learning_rate=learning_rate if learning_rate is not None else params.get("lr", 3e-4),
+        weight_decay=weight_decay if weight_decay is not None else params.get("wd", 1e-3),
+        num_epochs=num_epochs if num_epochs is not None else params.get("num_epochs", 20),
+        padding_length=padding_length if padding_length is not None else params.get("padding_length", 1500),
+    )
+
+
+def _preprocessed_from_cache(cached_result: Dict[str, Any]) -> PreprocessedData:
+    """Convert cache payloads into the same shape returned by preprocessing."""
+    return PreprocessedData(
+        processed_data=cached_result['processed_data'],
+        labels=cached_result['labels'],
+        groups=cached_result['groups'],
+        unique_labels=cached_result['unique_labels'],
+    )
+
+
+def _load_or_preprocess_data(
+    input_path: str,
+    output_folder: str,
+    dataset: str,
+    padding_length: int,
+    pipeline_steps: Optional[Dict[str, Dict[str, Any]]],
+    use_cache: bool = True,
+) -> PreprocessedData:
+    """Load preprocessed data from cache when possible, otherwise process and cache it."""
+    cache_dir = os.path.join(output_folder, '.wsdp_cache')
+    cache_key = None
+
+    if use_cache:
+        cache_key = get_cache_key(
+            input_path,
+            dataset,
+            padding_length,
+            preprocess_config=pipeline_steps,
+        )
+        cached_result = load_cache(cache_dir, cache_key)
+        if cached_result is not None:
+            logger.info("Cache hit: loaded preprocessed data from cache")
+            return _preprocessed_from_cache(cached_result)
+        logger.info("Cache miss: processing data from scratch")
+
+    processed_data, labels, groups, unique_labels = _load_and_preprocess(
+        input_path,
+        dataset,
+        padding_length,
+        pipeline_steps=pipeline_steps,
+    )
+
+    if use_cache and cache_key is not None:
+        save_cache(cache_dir, cache_key, processed_data, labels, groups, unique_labels)
+
+    return PreprocessedData(processed_data, labels, groups, unique_labels)
 
 
 def _create_data_split(
@@ -147,6 +281,114 @@ def _create_data_split(
     return train_data, val_data, test_data, train_labels, val_labels, test_labels
 
 
+def _create_split_bundle(
+    processed_data: np.ndarray,
+    labels: np.ndarray,
+    groups: np.ndarray,
+    test_split: float,
+    val_split: float,
+    seed: int,
+    use_simple_split: bool,
+) -> DataSplitBundle:
+    """Create a named train/validation/test split for one seed."""
+    return DataSplitBundle(*_create_data_split(
+        processed_data,
+        labels,
+        groups,
+        test_split,
+        val_split,
+        seed,
+        use_simple_split,
+    ))
+
+
+def _create_loaders(
+    split: DataSplitBundle,
+    batch_size: int,
+    num_workers: int,
+) -> LoaderBundle:
+    """Build train/test/validation DataLoaders from a split bundle."""
+    train_dataset = CSIDataset(split.train_data, split.train_labels)
+    test_dataset = CSIDataset(split.test_data, split.test_labels)
+    val_dataset = CSIDataset(split.val_data, split.val_labels)
+    return LoaderBundle(
+        train=DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True),
+        test=DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False),
+        val=DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False),
+    )
+
+
+def _create_pipeline_model(
+    model_path: Optional[str],
+    model_name: str,
+    model_kwargs: Dict[str, Any],
+    num_classes: int,
+    input_shape: Tuple[int, ...],
+) -> nn.Module:
+    """Create the configured model while preserving registered/custom behavior."""
+    if model_path is None:
+        return create_model(
+            model_name,
+            num_classes=num_classes,
+            input_shape=input_shape,
+            **model_kwargs,
+        )
+    return load_custom_model(
+        model_path,
+        num_classes,
+        input_shape=input_shape,
+        model_kwargs=model_kwargs,
+    )
+
+
+def _save_training_history(training_history, output_path: Path, seed: int) -> None:
+    """Persist per-seed training history using the historical CSV format."""
+    history_path = output_path / f"training_history_{seed}.csv"
+    logger.info(f"training complete, save training_history to: {history_path}")
+    pd.DataFrame(training_history).to_csv(history_path, index_label='epoch')
+
+
+def _load_best_checkpoint(checkpoint_path: Path, device: torch.device) -> Dict[str, Any]:
+    """Load the best checkpoint or raise the historical missing-file error."""
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(f" no model in file path: {checkpoint_path}")
+    logger.info(f"loading model from {checkpoint_path} ...")
+    return torch.load(checkpoint_path, map_location=device)
+
+
+def _plot_confusion_matrix(all_labels, all_predictions, output_path: Path, seed: int) -> None:
+    """Write the per-seed confusion matrix image."""
+    cm = confusion_matrix(all_labels, all_predictions)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title(f"Confusion Matrix (Random State: {seed})", fontsize=16)
+    plt.ylabel("Actual Label", fontsize=12)
+    plt.xlabel("Predicted Label", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(output_path / f"cm_rs_{seed}.png")
+    plt.close()
+
+
+def _seed_record_from_history(
+    seed: int,
+    training_history,
+    checkpoint: Dict[str, Any],
+    test_accuracy: float,
+) -> SeedRecord:
+    """Build the persisted per-seed record from training/evaluation outputs."""
+    if isinstance(training_history, dict) and training_history.get('train_acc'):
+        train_acc = training_history['train_acc'][-1] / 100.0
+    else:
+        train_acc = 0.0
+    val_acc = checkpoint.get('best_val_acc', 0.0) / 100.0
+    return SeedRecord(
+        seed=seed,
+        train_acc=train_acc,
+        val_acc=val_acc,
+        test_acc=test_accuracy,
+    )
+
+
 def _evaluate_model(
     model: nn.Module,
     test_loader: DataLoader,
@@ -176,6 +418,139 @@ def _evaluate_model(
 
     accuracy = accuracy_score(all_labels, all_predictions)
     return all_predictions, all_labels, accuracy
+
+
+def _run_seed_training(
+    seed_index: int,
+    total_seeds: int,
+    current_seed: int,
+    preprocessed: PreprocessedData,
+    output_path: Path,
+    hyperparameters: Hyperparameters,
+    test_split: float,
+    val_split: float,
+    use_simple_split: bool,
+    model_path: Optional[str],
+    model_name: str,
+    model_kwargs: Dict[str, Any],
+    device: torch.device,
+    num_workers: int,
+    progress_callback: Optional[Callable],
+) -> SeedRunResult:
+    """Train, evaluate, and persist artifacts for one random seed."""
+    print(f"\n{'=' * 25} epoch {seed_index + 1}/{total_seeds} "
+          f"begin (Random State: {current_seed}) {'=' * 25}\n")
+
+    split = _create_split_bundle(
+        preprocessed.processed_data,
+        preprocessed.labels,
+        preprocessed.groups,
+        test_split,
+        val_split,
+        current_seed,
+        use_simple_split,
+    )
+
+    logger.info(f"num of samples in train_data: {len(split.train_data)}, "
+                f"num of samples in test_data: {len(split.test_data)}, num of samples in val_data: {len(split.val_data)}")
+    logger.info(f"shape of first sample of train_data: {split.train_data[0].shape}, "
+                f"shape of last sample of train_data: {split.train_data[-1].shape}")
+
+    loaders = _create_loaders(split, hyperparameters.batch_size, num_workers)
+    model = _create_pipeline_model(
+        model_path=model_path,
+        model_name=model_name,
+        model_kwargs=model_kwargs,
+        num_classes=len(preprocessed.unique_labels),
+        input_shape=split.train_data[0].shape,
+    ).to(device)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=hyperparameters.learning_rate,
+        weight_decay=hyperparameters.weight_decay,
+    )
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+    checkpoint_path = output_path / f"best_checkpoint_{current_seed}.pth"
+
+    logger.info("begin training")
+    training_history = train_model(
+        model=model,
+        criterion=criterion,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        train_loader=loaders.train,
+        val_loader=loaders.val,
+        num_epochs=hyperparameters.num_epochs,
+        device=device,
+        checkpoint_path=checkpoint_path,
+        padding_length=hyperparameters.padding_length,
+        progress_callback=progress_callback,
+    )
+
+    _save_training_history(training_history, output_path, current_seed)
+    logger.info("save successfully, begin to evaluate model")
+
+    checkpoint = _load_best_checkpoint(checkpoint_path, device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+
+    all_predictions, all_labels, current_top1_acc = _evaluate_model(model, loaders.test, device)
+    logger.info("eval complete")
+    logger.info(f"Top-1 acc of current epoch: {current_top1_acc:.4f}")
+    logger.info("classification report:\n" + classification_report(all_labels, all_predictions))
+
+    _plot_confusion_matrix(all_labels, all_predictions, output_path, current_seed)
+    return SeedRunResult(
+        top1_accuracy=current_top1_acc,
+        record=_seed_record_from_history(
+            seed=current_seed,
+            training_history=training_history,
+            checkpoint=checkpoint,
+            test_accuracy=current_top1_acc,
+        ),
+    )
+
+
+def _log_accuracy_summary(top1_accuracies: list) -> None:
+    """Log aggregate accuracy metrics for all seed runs."""
+    accuracies_np = np.array(top1_accuracies)
+    mean_accuracy = np.mean(accuracies_np)
+    variance_accuracy = np.var(accuracies_np)
+    logger.info(f"All {len(top1_accuracies)} Top-1 acc: {[f'{acc:.4f}' for acc in top1_accuracies]}")
+    logger.info(f"Avg Top-1 acc: {mean_accuracy:.4f}")
+    logger.info(f"Variance of Top-1 acc: {variance_accuracy:.6f}")
+
+
+def _processor_record(pipeline_steps: Optional[Dict[str, Dict[str, Any]]]) -> Tuple[str, Dict[str, Any]]:
+    """Return processor metadata persisted in the pipeline record."""
+    if pipeline_steps is None:
+        return "BaseProcessor", {"phase_calibration": "default", "wavelet_denoise_csi": "default"}
+    return "ConfigurableProcessor", pipeline_steps
+
+
+def _persist_pipeline_summary(
+    output_folder: str,
+    dataset: str,
+    total_samples: int,
+    pipeline_steps: Optional[Dict[str, Dict[str, Any]]],
+    model_path: Optional[str],
+    model_name: str,
+    seed_records: list,
+) -> None:
+    """Persist the aggregate JSON record for a pipeline run."""
+    processor_type, processor_steps = _processor_record(pipeline_steps)
+    model_str = f"custom:{model_path}" if model_path is not None else model_name
+    persist_pipeline_record(
+        output_folder=output_folder,
+        dataset=dataset,
+        total_samples=total_samples,
+        reader_name=readers.get_reader_class(dataset).__name__,
+        processor_type=processor_type,
+        processor_steps=processor_steps,
+        model=model_str,
+        seed_records=seed_records,
+    )
 
 
 def pipeline(
@@ -233,8 +608,7 @@ def pipeline(
     opath = Path(output_folder)
     dataset_name = dataset
 
-    # Resolve num_workers
-    effective_num_workers = num_workers if num_workers is not None else min(os.cpu_count() or 1, 8)
+    effective_num_workers = _effective_num_workers(num_workers)
 
     model_kwargs = model_kwargs or {}
     resolved_pipeline_steps = _resolve_pipeline_steps(
@@ -253,65 +627,43 @@ def pipeline(
     else:
         logger.info(f"Using configurable preprocessing pipeline: {resolved_pipeline_steps}")
 
-    # Load default params
     try:
-        params = load_params(dataset_name)
+        params = _load_pipeline_params(dataset_name, config_file)
     except (ValueError, FileNotFoundError) as e:
         logger.error(f"{e}")
         return
 
-    # Load YAML config overrides if provided
-    if config_file and os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            yaml_params = yaml.safe_load(f)
-        if yaml_params and dataset_name in yaml_params:
-            params.update(yaml_params[dataset_name])
-        logger.info(f"Loaded config from {config_file}")
-
-    # Apply function-level overrides (highest priority)
-    batch = batch_size if batch_size is not None else params.get("batch", 32)
-    lr = learning_rate if learning_rate is not None else params.get("lr", 3e-4)
-    wd = weight_decay if weight_decay is not None else params.get("wd", 1e-3)
-    num_epochs_val = num_epochs if num_epochs is not None else params.get("num_epochs", 20)
-    pad_len = padding_length if padding_length is not None else params.get("padding_length", 1500)
+    hyperparameters = _resolve_hyperparameters(
+        params,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        num_epochs=num_epochs,
+        padding_length=padding_length,
+    )
+    pad_len = hyperparameters.padding_length
 
     random_seeds = [random.randint(0, 999) for _ in range(num_seeds)]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    logger.info(f"Hyperparameters: batch={batch}, lr={lr}, wd={wd}, epochs={num_epochs_val}, pad={pad_len}")
+    logger.info(
+        f"Hyperparameters: batch={hyperparameters.batch_size}, "
+        f"lr={hyperparameters.learning_rate}, wd={hyperparameters.weight_decay}, "
+        f"epochs={hyperparameters.num_epochs}, pad={pad_len}"
+    )
 
     # begin to preprocess, training and eval
-    cache_dir = os.path.join(output_folder, '.wsdp_cache')
-    cached_result = None
-    cache_key = None
-    if use_cache:
-        cache_key = get_cache_key(
-            ipath,
-            dataset_name,
-            pad_len,
-            preprocess_config=resolved_pipeline_steps,
-        )
-        cached_result = load_cache(cache_dir, cache_key)
-
-    if cached_result is not None:
-        logger.info("Cache hit: loaded preprocessed data from cache")
-        processed_data = cached_result['processed_data']
-        zero_indexed_labels = cached_result['labels']
-        zero_indexed_groups = cached_result['groups']
-        unique_labels = cached_result['unique_labels']
-    else:
-        if use_cache:
-            logger.info("Cache miss: processing data from scratch")
-        processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels = \
-            _load_and_preprocess(
-                ipath,
-                dataset_name,
-                pad_len,
-                pipeline_steps=resolved_pipeline_steps,
-            )
-        if use_cache and cache_key is not None:
-            save_cache(cache_dir, cache_key, processed_data, zero_indexed_labels,
-                       zero_indexed_groups, unique_labels)
+    preprocessed = _load_or_preprocess_data(
+        input_path=ipath,
+        output_folder=output_folder,
+        dataset=dataset_name,
+        padding_length=pad_len,
+        pipeline_steps=resolved_pipeline_steps,
+        use_cache=use_cache,
+    )
+    processed_data = preprocessed.processed_data
+    zero_indexed_labels = preprocessed.labels
+    zero_indexed_groups = preprocessed.groups
 
     logger.info(f"the following {num_seeds} seeds will be used: {random_seeds}")
 
@@ -326,140 +678,34 @@ def pipeline(
                        f"Using simple train_test_split instead of GroupShuffleSplit.")
 
     for i, current_seed in enumerate(random_seeds):
-        print(f"\n{'=' * 25} epoch {i + 1}/{len(random_seeds)} "
-              f"begin (Random State: {current_seed}) {'=' * 25}\n")
-
-        train_data, val_data, test_data, train_labels, val_labels, test_labels = \
-            _create_data_split(
-                processed_data, zero_indexed_labels, zero_indexed_groups,
-                test_split, val_split, current_seed, use_simple_split,
-            )
-
-        logger.info(f"num of samples in train_data: {len(train_data)}, "
-                     f"num of samples in test_data: {len(test_data)}, num of samples in val_data: {len(val_data)}")
-        logger.info(f"shape of first sample of train_data: {train_data[0].shape}, "
-                     f"shape of last sample of train_data: {train_data[-1].shape}")
-
-        train_dataset = CSIDataset(train_data, train_labels)
-        test_dataset = CSIDataset(test_data, test_labels)
-        val_dataset = CSIDataset(val_data, val_labels)
-        train_loader = DataLoader(train_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)
-        val_loader = DataLoader(val_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)
-
-        num_classes = len(unique_labels)
-        input_shape = train_data[0].shape
-        if model_path is None:
-            model = create_model(
-                model_name,
-                num_classes=num_classes,
-                input_shape=input_shape,
-                **model_kwargs,
-            )
-        else:
-            model = load_custom_model(
-                model_path,
-                num_classes,
-                input_shape=input_shape,
-                model_kwargs=model_kwargs,
-            )
-        model = model.to(device)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
-        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
-
-        checkpoint_path = opath / f"best_checkpoint_{current_seed}.pth"
-
-        logger.info("begin training")
-        training_history = train_model(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            num_epochs=num_epochs_val,
+        seed_result = _run_seed_training(
+            seed_index=i,
+            total_seeds=len(random_seeds),
+            current_seed=current_seed,
+            preprocessed=preprocessed,
+            output_path=opath,
+            hyperparameters=hyperparameters,
+            test_split=test_split,
+            val_split=val_split,
+            use_simple_split=use_simple_split,
+            model_path=model_path,
+            model_name=model_name,
+            model_kwargs=model_kwargs,
             device=device,
-            checkpoint_path=checkpoint_path,
-            padding_length=pad_len,
+            num_workers=effective_num_workers,
             progress_callback=progress_callback,
         )
+        top1_accuracies.append(seed_result.top1_accuracy)
+        seed_records.append(seed_result.record)
 
-        logger.info(f"training complete, save training_history to: "
-                    f"{opath / ('training_history_' + str(current_seed) + '.csv')}")
-
-        df = pd.DataFrame(training_history)
-        df.to_csv(opath / f"training_history_{current_seed}.csv", index_label='epoch')
-
-        logger.info("save successfully, begin to evaluate model")
-        cp = checkpoint_path
-        if not os.path.isfile(cp):
-            raise FileNotFoundError(f" no model in file path: {cp}")
-
-        logger.info(f"loading model from {cp} ...")
-        checkpoint = torch.load(cp, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-
-        all_predictions, all_labels, current_top1_acc = _evaluate_model(model, test_loader, device)
-
-        logger.info("eval complete")
-
-        top1_accuracies.append(current_top1_acc)
-        logger.info(f"Top-1 acc of current epoch: {current_top1_acc:.4f}")
-
-        logger.info("classification report:\n" + classification_report(all_labels, all_predictions))
-
-        cm = confusion_matrix(all_labels, all_predictions)
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        plt.title(f"Confusion Matrix (Random State: {current_seed})", fontsize=16)
-        plt.ylabel("Actual Label", fontsize=12)
-        plt.xlabel("Predicted Label", fontsize=12)
-        plt.tight_layout()
-
-        figure_path = opath / f"cm_rs_{current_seed}.png"
-        plt.savefig(figure_path)
-        plt.close()
-
-        # ---- collect per-seed metrics ----
-        if isinstance(training_history, dict) and training_history.get('train_acc'):
-            train_acc = training_history['train_acc'][-1] / 100.0
-        else:
-            train_acc = 0.0
-        val_acc = checkpoint.get('best_val_acc', 0.0) / 100.0
-        seed_records.append(SeedRecord(
-            seed=current_seed,
-            train_acc=train_acc,
-            val_acc=val_acc,
-            test_acc=current_top1_acc,
-        ))
-
-    accuracies_np = np.array(top1_accuracies)
-    mean_accuracy = np.mean(accuracies_np)
-    variance_accuracy = np.var(accuracies_np)
-
-    logger.info(f"All {len(random_seeds)} Top-1 acc: {[f'{acc:.4f}' for acc in top1_accuracies]}")
-    logger.info(f"Avg Top-1 acc: {mean_accuracy:.4f}")
-    logger.info(f"Variance of Top-1 acc: {variance_accuracy:.6f}")
-
-    # ---- persist pipeline record ----
-    reader_name = readers.get_reader_class(dataset_name).__name__
-    if resolved_pipeline_steps is None:
-        proc_type = "BaseProcessor"
-        proc_steps = {"phase_calibration": "default", "wavelet_denoise_csi": "default"}
-    else:
-        proc_type = "ConfigurableProcessor"
-        proc_steps = resolved_pipeline_steps
-    model_str = f"custom:{model_path}" if model_path is not None else model_name
-
-    persist_pipeline_record(
+    _log_accuracy_summary(top1_accuracies)
+    _persist_pipeline_summary(
         output_folder=output_folder,
         dataset=dataset_name,
         total_samples=len(processed_data),
-        reader_name=reader_name,
-        processor_type=proc_type,
-        processor_steps=proc_steps,
-        model=model_str,
+        pipeline_steps=resolved_pipeline_steps,
+        model_path=model_path,
+        model_name=model_name,
         seed_records=seed_records,
     )
 

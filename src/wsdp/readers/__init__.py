@@ -57,6 +57,27 @@ def get_all_reader_metadata(dataset: str) -> dict:
     return reader.get_metadata()
 
 
+def _validate_input_dir(file_path: str) -> Path:
+    """Return a valid input directory path or raise the historical error."""
+    input_path = Path(file_path)
+    if not input_path.exists() or not input_path.is_dir():
+        raise ValueError(f"invalid file path: {input_path}")
+    return input_path
+
+
+def _collect_data_files(input_path: Path) -> List[Path]:
+    """Collect candidate data files while excluding label/truth sidecars."""
+    return [f for f in input_path.rglob("*") if f.is_file() and "truth" not in f.name]
+
+
+def _extend_csi_data(target: List[CSIData], data) -> None:
+    """Append a reader result that may be one CSIData object or a list of them."""
+    if isinstance(data, list):
+        target.extend(data)
+    else:
+        target.append(data)
+
+
 def _process_file(reader, file_path):
     """
     process function for concurrent reading
@@ -72,10 +93,8 @@ def _process_file(reader, file_path):
 
 
 def load_data(file_path: str, dataset: str) -> List[CSIData]:
-    input_path = Path(file_path)
-    if not input_path.exists() or not input_path.is_dir():
-        raise ValueError(f"invalid file path: {input_path}")
-    files = [f for f in input_path.rglob("*") if f.is_file() and "truth" not in f.name]
+    input_path = _validate_input_dir(file_path)
+    files = _collect_data_files(input_path)
     if not files:
         raise IOError(f"no file in folder: {input_path}")
 
@@ -89,7 +108,7 @@ def load_data(file_path: str, dataset: str) -> List[CSIData]:
         for future in as_completed(futures):
             file_name, data, err = future.result()
             if err is None:
-                csi_data_list.extend(data) if isinstance(data, List) else csi_data_list.append(data)
+                _extend_csi_data(csi_data_list, data)
                 print(f"√ processed: {file_name}\n")
             elif err == "format_mismatch":
                 skipped += 1
