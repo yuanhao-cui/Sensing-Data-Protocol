@@ -105,8 +105,7 @@ def download(dataset_name: str, dest: str, email: str = None, password: str = No
 
 
 def _download_file_from_url(url, dest, file_name):
-    """Download a file from URL with multi-threaded chunked download and S3 region auto-redirect."""
-    url = _resolve_s3_region(url, file_name)
+    """Download a file from a backend-generated URL with multi-threaded chunked download."""
 
     chunk_size = 16 * 1024 * 1024
     max_workers = 8
@@ -170,46 +169,6 @@ def _download_file_from_url(url, dest, file_name):
                 except Exception as exc:
                     print(f'\nfailed to download a particular chunk, stop downloading: {exc}')
                     sys.exit(1)
-
-
-def _resolve_s3_region(url: str, file_name: str) -> str:
-    """
-    Auto-detect and correct S3 region mismatches.
-
-    If the S3 bucket is in a different region, the server returns a 301 redirect
-    with the correct endpoint. This function follows that redirect.
-    """
-    try:
-        resp = requests.head(url, allow_redirects=False, timeout=10)
-        if resp.status_code in (301, 302, 307):
-            new_url = resp.headers.get('Location', url)
-            if new_url != url:
-                print(f"S3 region redirect detected for {file_name}.")
-                print(f"  Original URL: {url[:80]}...")
-                print(f"  Redirected to: {new_url[:80]}...")
-                return new_url
-        elif resp.status_code == 400:
-            # Check for PermanentRedirect error in response
-            # S3 returns this when the region is wrong
-            try:
-                error_resp = requests.get(url, timeout=10)
-                if "PermanentRedirect" in error_resp.text or "redirect" in error_resp.text.lower():
-                    import xml.etree.ElementTree as ET
-                    root = ET.fromstring(error_resp.text)
-                    endpoint = root.find('.//{http://s3.amazonaws.com/doc/2006-03-01/}Endpoint')
-                    if endpoint is not None:
-                        # Reconstruct URL with correct endpoint
-                        from urllib.parse import urlparse
-                        parsed = urlparse(url)
-                        new_url = f"{parsed.scheme}://{endpoint.text}{parsed.path}"
-                        print(f"S3 region error detected. Retrying with: {new_url[:80]}...")
-                        return new_url
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    return url
 
 
 def _single_thread_download(url, dest, file_name):

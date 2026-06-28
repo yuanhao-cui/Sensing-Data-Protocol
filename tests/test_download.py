@@ -3,44 +3,12 @@ import os
 import sys
 import pytest
 from unittest.mock import patch, MagicMock
-from wsdp.download import _resolve_s3_region, download
+from wsdp.download import download
 
 # wsdp/__init__.py exports a `download` function that shadows the wsdp.download
 # module object. In Python < 3.13 patch('wsdp.download.xxx') resolves to the
 # function, causing AttributeError. We use the real module from sys.modules.
 _download_module = sys.modules['wsdp.download']
-
-
-class TestS3RegionRedirect:
-    def test_no_redirect(self):
-        """URL with no redirect should return unchanged."""
-        with patch.object(_download_module, 'requests') as mock_req:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.headers = {}
-            mock_req.head.return_value = mock_resp
-            result = _resolve_s3_region("https://example.com/file.zip", "file.zip")
-            assert result == "https://example.com/file.zip"
-
-    def test_301_redirect(self):
-        """301 redirect should return new URL."""
-        with patch.object(_download_module, 'requests') as mock_req:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 301
-            mock_resp.headers = {'Location': 'https://correct-region.s3.amazonaws.com/file.zip'}
-            mock_req.head.return_value = mock_resp
-            result = _resolve_s3_region("https://wrong-region.s3.amazonaws.com/file.zip", "file.zip")
-            assert "correct-region" in result
-
-    def test_302_redirect(self):
-        """302 redirect should return new URL."""
-        with patch.object(_download_module, 'requests') as mock_req:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 302
-            mock_resp.headers = {'Location': 'https://new-url.com/file.zip'}
-            mock_req.head.return_value = mock_resp
-            result = _resolve_s3_region("https://old-url.com/file.zip", "file.zip")
-            assert result == "https://new-url.com/file.zip"
 
 
 class TestDownloadAuth:
