@@ -10,7 +10,8 @@
 |----------|-------|
 | **Format** | .npy |
 | **Subcarriers** | 30 |
-| **CSI Shape** | (270, 1000) |
+| **Processed .npy Shape** | (3, 30, 3, 1000) — (receiver, subcarrier, antenna, time) |
+| **Sample Shape** | (1000, 30, 9) — (time, subcarrier, antenna); 9 = 3 receivers × 3 antennas; 1 sample per file |
 | **Complex** | ✅ |
 | **Classes** | 55 activities |
 | **Samples** | 9,900 |
