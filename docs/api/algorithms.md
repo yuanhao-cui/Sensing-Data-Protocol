@@ -35,7 +35,7 @@ features = extract_features(normalized, features=['doppler', 'entropy'])
 | `wavelet` | `denoise(csi, method='wavelet')` | Wavelet-based denoising using soft thresholding. Good general-purpose denoiser. |
 | `butterworth` | `denoise(csi, method='butterworth', order=5)` | Butterworth low-pass filter. Smooth frequency response with configurable order. |
 | `savgol` | `denoise(csi, method='savgol', window=11, polyorder=3)` | Savitzky-Golay filter. Preserves signal shape while removing high-frequency noise. |
-| `bandpass` | `denoise(csi, method='bandpass', low=0.5, high=50.0)` | Bandpass filter for isolating activity-related frequency components. |
+| `bandpass` | `denoise(csi, method='bandpass', low_freq=0.5, high_freq=50.0, fs=1000.0)` | Bandpass filter for isolating activity-related frequency components. |
 | `hampel` | `denoise(csi, method='hampel', window=5, threshold=3.0)` | Hampel identifier. Replaces outlier samples with local median. Effective against impulse noise. |
 
 ### Calibration

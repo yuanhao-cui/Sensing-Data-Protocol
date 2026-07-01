@@ -85,7 +85,7 @@ from wsdp.algorithms import extract_features, detect, remove_outliers
 # Denoising (5 methods)
 denoised = denoise(csi, method='butterworth', order=5)
 denoised = denoise(csi, method='hampel', window=5, threshold=3.0)
-denoised = denoise(csi, method='bandpass', low=0.5, high=50.0)
+denoised = denoise(csi, method='bandpass', low_freq=0.5, high_freq=50.0, fs=1000.0)
 
 # Calibration
 calibrated = calibrate(denoised, method='stc')

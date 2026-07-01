@@ -2,6 +2,45 @@
 
 See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-Scalable-Wireless-Sensing/blob/main/CHANGELOG.md) on GitHub for full version history.
 
+## v0.5.0 (2026-07-01)
+
+### New Features
+- **Configurable pipeline**: `pipeline()` supports free model and algorithm selection; added `ConfigurableProcessor` for dict-based algorithm pipelines.
+- **Pipeline record JSON output**: `pipeline()` can emit a JSON summary of the executed configuration.
+- **Integration test runner**: `test_tools/run_integration_tests.py` exercises four datasets across four execution paths.
+- **Run-full-pipeline demo**: `test_tools/run_full_pipeline.py` demonstrates end-to-end loading, preprocessing, split, training, and evaluation.
+
+### Scientific & Evaluation Protocol
+- **Dataset-specific preprocessing policy**: Added `src/wsdp/dataset_policy.py`; `execute_pipeline()` accepts `dataset=` and applies amplitude-primary cleanup for `xrf55`.
+- **XRF55 repetition split**: Added `_create_xrf55_repetition_split()` with train 01–12 / val 13–16 / test 17–20 and train-only normalization statistics.
+- **Condition/repetition grouping**: Widar uses position/orientation/receiver, Gait uses track/receiver, and XRF55 uses repetition id as the split group.
+- **XRF55 reader consolidation**: `.npy` reader returns one `CSIData` sample per file with shape `(1000, 30, 9)` (3 receivers × 3 antennas).
+- **`CSIDataset`**: Added `preserve_real_sign` flag for near-real complex inputs.
+
+### Bug Fixes
+- **Wavelet denoising 2D input**: `wavelet_denoise_csi()` supports 2D `(T, F)` and 3D `(T, F, A)` inputs.
+- **Download reliability**: Fixed redirect/SSL handling and Python < 3.13 test patching for `wsdp.download`.
+- **`interpolate()` signature guard**: Avoids passing `method=` to interpolators that do not accept it.
+- **Butterworth denoise guard**: Changed `T < min_len` to `T <= min_len` for consistent short-sequence handling.
+
+### Engineering
+- Constrained `kagglehub` to `<1.0` in `pyproject.toml`.
+- Updated `benchmark_all_models.py` and `hparam_search.py` to pass `dataset=` to `_create_data_split()`.
+- Simplified integration runner to raise failures directly instead of swallowing them into status summaries.
+
+### Code Quality
+- Archived `wsdp_old/` legacy modules to `archive/`.
+- Removed tracked MkDocs `site/` build artifacts.
+- Reorganized scattered root-level files.
+- Ruff lint fixes across `src/wsdp/`.
+- Upgraded synthetic test data to a physics-inspired CSI model.
+
+### Documentation
+- README expanded with documentation/resources sections.
+- API reference pages updated with parameter tables and current signatures.
+- User guide rewritten for presets, custom models, and YAML config.
+- Added Dataset Split Selectors table to `docs/user-guide/configuration.md`.
+
 ## v0.4.0 (2026-03-30)
 
 ### Critical Scientific Fixes (Tier 0)
