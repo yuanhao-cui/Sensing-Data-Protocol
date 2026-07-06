@@ -2,7 +2,21 @@
 
 All notable changes to WSDP are documented here.
 
-## [0.5.0] — 2026-07-01
+## [0.5.1] — 2026-07-07
+
+### 🔧 Bug Fixes
+
+- **Test compatibility with `CSIDataset` signature**: Updated `DummyDataset` in
+  `tests/test_core_configuration.py` to accept `preserve_real_sign`, matching the
+  keyword argument now passed by `pipeline()`.
+
+### ✨ New Features
+
+- **Backend presigned download URLs**: `src/wsdp/download.py` now uses
+  backend-generated presigned URLs for OVHCloud/MinIO storage and no longer
+  resolves S3 regions on the client. Generic HEAD redirect handling is preserved.
+
+## [0.5.0] — 2026-07-07
 
 ### ✨ New Features
 
