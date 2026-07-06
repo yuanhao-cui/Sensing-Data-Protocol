@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
 from . import readers
-from .dataset_policy import is_amplitude_primary_dataset
+from .dataset_policy import uses_phase_amplitude
 from .datasets import CSIDataset
 from .utils import load_params, train_model, resize_csi_to_fixed_length, load_custom_model
 from .utils.cache import get_cache_key, load_cache, save_cache
@@ -383,6 +383,12 @@ def pipeline(
             cache_preprocess_config = {
                 "pipeline_steps": resolved_pipeline_steps,
                 "split_protocol": "widar_condition_position_orientation_receiver",
+                "input_representation": "automatic_amplitude_phase_v1",
+            }
+        elif uses_phase_amplitude(dataset_name):
+            cache_preprocess_config = {
+                "pipeline_steps": resolved_pipeline_steps,
+                "input_representation": "automatic_amplitude_phase_v1",
             }
         cache_key = get_cache_key(
             ipath,
@@ -441,26 +447,30 @@ def pipeline(
         logger.info(f"shape of first sample of train_data: {train_data[0].shape}, "
                      f"shape of last sample of train_data: {train_data[-1].shape}")
 
-        preserve_real_sign = (
-            is_amplitude_primary_dataset(dataset_name)
-            and isinstance(resolved_pipeline_steps, dict)
-            and resolved_pipeline_steps.get("normalize", {}).get("method") == "z-score"
-        )
         train_dataset = CSIDataset(
-            train_data, train_labels, preserve_real_sign=preserve_real_sign
+            train_data,
+            train_labels,
+            dataset_name=dataset_name,
+            pipeline_steps=resolved_pipeline_steps,
         )
         test_dataset = CSIDataset(
-            test_data, test_labels, preserve_real_sign=preserve_real_sign
+            test_data,
+            test_labels,
+            dataset_name=dataset_name,
+            pipeline_steps=resolved_pipeline_steps,
         )
         val_dataset = CSIDataset(
-            val_data, val_labels, preserve_real_sign=preserve_real_sign
+            val_data,
+            val_labels,
+            dataset_name=dataset_name,
+            pipeline_steps=resolved_pipeline_steps,
         )
         train_loader = DataLoader(train_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)
         val_loader = DataLoader(val_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)
 
         num_classes = len(unique_labels)
-        input_shape = train_data[0].shape
+        input_shape = tuple(train_dataset.data_list.shape[1:])
         if model_path is None:
             model = create_model(
                 model_name,

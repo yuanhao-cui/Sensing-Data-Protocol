@@ -49,9 +49,15 @@ def benchmark_model(model_name, model_class, processed_data, labels, groups,
             val_data = np.stack(val_data, axis=0)
             test_data = np.stack(test_data, axis=0)
 
-            train_dataset = CSIDataset(train_data, train_labels)
-            val_dataset = CSIDataset(val_data, val_labels)
-            test_dataset = CSIDataset(test_data, test_labels)
+            train_dataset = CSIDataset(
+                train_data, train_labels, dataset_name=dataset
+            )
+            val_dataset = CSIDataset(
+                val_data, val_labels, dataset_name=dataset
+            )
+            test_dataset = CSIDataset(
+                test_data, test_labels, dataset_name=dataset
+            )
 
             nw = min(os.cpu_count() or 1, 8)
             train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=nw, shuffle=True)
@@ -59,7 +65,7 @@ def benchmark_model(model_name, model_class, processed_data, labels, groups,
             test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=nw, shuffle=False)
 
             # Get input shape from data
-            sample_shape = train_data[0].shape  # (T, F*A) after abs
+            sample_shape = tuple(train_dataset.data_list.shape[1:])
             T = sample_shape[0]
             if len(sample_shape) == 2:
                 F_dim = sample_shape[1]

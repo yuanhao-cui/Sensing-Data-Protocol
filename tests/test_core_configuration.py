@@ -22,14 +22,21 @@ class DummyModel(nn.Module):
 
 
 class DummyDataset(torch.utils.data.Dataset):
-    def __init__(self, _data, labels):
+    def __init__(
+        self,
+        data,
+        labels,
+        dataset_name="",
+        pipeline_steps=None,
+    ):
+        self.data_list = torch.from_numpy(data).float()
         self.labels = list(labels)
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return torch.ones(4, 3, 1), torch.tensor(self.labels[idx])
+        return self.data_list[idx], torch.tensor(self.labels[idx])
 
 
 def _split_data():

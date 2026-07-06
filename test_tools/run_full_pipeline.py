@@ -133,9 +133,24 @@ def main():
     print(f"   训练集: {len(train_data)} | 验证集: {len(val_data)} | 测试集: {len(test_data)}")
 
     # Step 5: 创建 DataLoader
-    train_dataset = CSIDataset(train_data, train_labels)
-    val_dataset = CSIDataset(val_data, val_labels)
-    test_dataset = CSIDataset(test_data, test_labels)
+    train_dataset = CSIDataset(
+        train_data,
+        train_labels,
+        dataset_name=DATASET_NAME,
+        pipeline_steps=pipeline_steps,
+    )
+    val_dataset = CSIDataset(
+        val_data,
+        val_labels,
+        dataset_name=DATASET_NAME,
+        pipeline_steps=pipeline_steps,
+    )
+    test_dataset = CSIDataset(
+        test_data,
+        test_labels,
+        dataset_name=DATASET_NAME,
+        pipeline_steps=pipeline_steps,
+    )
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -149,7 +164,7 @@ def main():
         print(f"      [{cat}] {name}")
     print("      ... (更多模型请运行 list_models() 查看)")
 
-    input_shape = processed_data[0].shape  # (T, F, A)
+    input_shape = tuple(train_dataset.data_list.shape[1:])
     model = create_model(MODEL_NAME, num_classes=num_classes, input_shape=input_shape)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)

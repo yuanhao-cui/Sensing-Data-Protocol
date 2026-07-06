@@ -138,15 +138,15 @@ def run_hparam_search(
 
         # DataLoaders
         train_loader = DataLoader(
-            CSIDataset(train_data, train_labels),
+            CSIDataset(train_data, train_labels, dataset_name=dataset),
             batch_size=batch_size, shuffle=True,
         )
         val_loader = DataLoader(
-            CSIDataset(val_data, val_labels),
+            CSIDataset(val_data, val_labels, dataset_name=dataset),
             batch_size=batch_size, shuffle=False,
         )
         test_loader = DataLoader(
-            CSIDataset(test_data, test_labels),
+            CSIDataset(test_data, test_labels, dataset_name=dataset),
             batch_size=batch_size, shuffle=False,
         )
 

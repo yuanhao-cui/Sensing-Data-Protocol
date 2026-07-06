@@ -8,6 +8,7 @@ import torch
 import numpy as np
 
 from typing import Optional
+from .datasets import CSIDataset
 from .models import CSIModel
 from .utils import load_custom_model
 from .utils.resize import resize_csi_to_fixed_length
@@ -20,6 +21,8 @@ def predict(
     custom_model_path: Optional[str] = None,
     device: Optional[str] = None,
     padding_length: Optional[int] = None,
+    dataset_name: str = "",
+    pipeline_steps: Optional[dict] = None,
 ) -> np.ndarray:
     """
     Run inference on CSI data using a trained model.
@@ -33,6 +36,10 @@ def predict(
         device: 'cuda' or 'cpu'. Auto-detected if None.
         padding_length: Target time length for padding/truncation.
             If None, reads from checkpoint metadata; falls back to 1500.
+        dataset_name: Dataset policy name. ``widar`` and ``gait`` use
+            amplitude-phase inputs automatically; other datasets use amplitude.
+        pipeline_steps: Preprocessing pipeline used for training. Required to
+            recognize prepared Widar/Gait z-score amplitude-phase channels.
 
     Returns:
         np.ndarray: Predicted class indices, shape (N,) or scalar for single sample
@@ -64,9 +71,14 @@ def predict(
     samples = resize_csi_to_fixed_length(samples, target_length=padding_length)
     data = np.stack(samples, axis=0)
 
-    # Take amplitude (as CSIDataset does)
-    data = np.abs(data)
-    tensor_data = torch.from_numpy(data).float()
+    # Apply the same dataset-driven representation used during training.
+    inference_dataset = CSIDataset(
+        data,
+        np.zeros(len(data), dtype=np.int64),
+        dataset_name=dataset_name,
+        pipeline_steps=pipeline_steps,
+    )
+    tensor_data = inference_dataset.data_list
 
     # Load model
     if custom_model_path:
@@ -94,6 +106,8 @@ def predict_single(
     custom_model_path: Optional[str] = None,
     device: Optional[str] = None,
     padding_length: Optional[int] = None,
+    dataset_name: str = "",
+    pipeline_steps: Optional[dict] = None,
 ) -> int:
     """
     Convenience function for single-sample inference.
@@ -105,6 +119,8 @@ def predict_single(
         custom_model_path: Path to custom model file (optional)
         device: 'cuda' or 'cpu' (optional)
         padding_length: Target time length
+        dataset_name: Dataset policy name.
+        pipeline_steps: Preprocessing pipeline used for training.
 
     Returns:
         int: Predicted class index
@@ -116,5 +132,7 @@ def predict_single(
         custom_model_path=custom_model_path,
         device=device,
         padding_length=padding_length,
+        dataset_name=dataset_name,
+        pipeline_steps=pipeline_steps,
     )
     return int(result[0])

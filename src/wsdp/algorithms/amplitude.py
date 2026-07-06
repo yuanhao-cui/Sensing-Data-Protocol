@@ -6,7 +6,7 @@ Provides normalization and outlier removal for CSI amplitude values.
 import numpy as np
 
 
-def normalize_amplitude(csi, method='z-score'):
+def normalize_amplitude(csi, method='z-score', return_phase_channels=False):
     """
     Normalize CSI amplitude along the time axis.
 
@@ -15,9 +15,15 @@ def normalize_amplitude(csi, method='z-score'):
         method: Normalization method
             - 'z-score': Zero mean, unit variance per subcarrier
             - 'min-max': Scale to [0, 1] per subcarrier
+        return_phase_channels: If True, return real-valued
+            ``[normalized_amplitude, phase]`` channels instead of rebuilding
+            a complex array. This preserves negative z-score amplitudes
+            without shifting phase by pi.
 
     Returns:
-        np.ndarray: Normalized CSI with same shape and dtype
+        np.ndarray: Normalized CSI with the same shape by default. When
+        ``return_phase_channels`` is True, the last dimension is doubled and
+        the returned array is real-valued.
 
     Reference:
         Standard statistical normalization. For CSI-specific usage:
@@ -25,6 +31,12 @@ def normalize_amplitude(csi, method='z-score'):
         with a Deep Learning Approach." IEEE GLOBECOM, 2015.
     """
     if csi.size == 0:
+        if return_phase_channels:
+            if not np.iscomplexobj(csi):
+                raise ValueError(
+                    "return_phase_channels=True requires complex CSI data"
+                )
+            return np.concatenate([np.abs(csi), np.angle(csi)], axis=-1)
         return csi.copy()
     if csi.ndim < 2:
         raise ValueError(f"Expected at least 2D array, got shape {csi.shape}")
@@ -48,6 +60,14 @@ def normalize_amplitude(csi, method='z-score'):
         range_val = amax - amin
         range_val = np.where(range_val < 1e-10, 1.0, range_val)
         norm_amp = (amplitude - amin) / range_val
+
+    if return_phase_channels:
+        if not np.iscomplexobj(csi):
+            raise ValueError(
+                "return_phase_channels=True requires complex CSI data"
+            )
+        phase = np.angle(csi)
+        return np.concatenate([norm_amp, phase], axis=-1)
 
     if np.iscomplexobj(csi):
         phase = np.angle(csi)

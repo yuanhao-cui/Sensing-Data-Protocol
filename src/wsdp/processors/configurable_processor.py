@@ -6,10 +6,16 @@ from functools import partial
 import numpy as np
 
 from wsdp.algorithms import execute_pipeline
+from wsdp.algorithms.amplitude import normalize_amplitude
+from wsdp.dataset_policy import pipeline_uses_zscore, uses_phase_amplitude
 
 
 class ConfigurableProcessor:
     """Processor that applies a user-defined algorithm pipeline to each CSI sample.
+
+    Widar and Gait use amplitude-phase model inputs automatically. When their
+    pipeline contains z-score normalization, normalization is emitted as
+    real-valued ``[signed_normalized_amplitude, phase]`` channels.
 
     Args:
         pipeline_steps: dict describing the algorithm pipeline, e.g.
@@ -61,11 +67,19 @@ def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
     if whole_csi.shape[0] < 2:
         return None, None, None
 
+    phase_zscore = (
+        uses_phase_amplitude(dataset)
+        and pipeline_uses_zscore(pipeline_steps)
+    )
+
     effective_pipeline_steps = pipeline_steps
     normalize_step = pipeline_steps.get("normalize", {})
     if (
-        dataset == "xrf55"
-        and normalize_step.get("method") in {"z-score", "min-max"}
+        phase_zscore
+        or (
+            dataset == "xrf55"
+            and normalize_step.get("method") in {"z-score", "min-max"}
+        )
     ):
         effective_pipeline_steps = {
             key: value for key, value in pipeline_steps.items()
@@ -73,5 +87,12 @@ def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
         }
 
     cleaned_csi = execute_pipeline(whole_csi, effective_pipeline_steps, dataset=dataset)
+
+    if phase_zscore:
+        cleaned_csi = normalize_amplitude(
+            cleaned_csi,
+            method="z-score",
+            return_phase_channels=True,
+        )
 
     return cleaned_csi, label, group
