@@ -172,20 +172,34 @@ class XrfReader(BaseReader):
             print(f"reshape failed: {e}")
             return []
 
-        csi_data_list = []
-        num_receivers = 3
         num_time_steps = 1000
 
-        for rx_idx in range(num_receivers):
-            csi_data = CSIData(file_path)
-            current_rx_data = reshaped_data[rx_idx]
+        # Old logic: split one .npy file into 3 CSIData samples by Rx.
+        # csi_data_list = []
+        # num_receivers = 3
+        # for rx_idx in range(num_receivers):
+        #     csi_data = CSIData(file_path)
+        #     current_rx_data = reshaped_data[rx_idx]
+        #
+        #     for timestamp in range(num_time_steps):
+        #         csi_array = current_rx_data[:, :, timestamp]
+        #         csi_array = csi_array.copy()
+        #         frame = BaseFrame(timestamp=timestamp, csi_array=csi_array)
+        #         csi_data.add_frame(frame)
+        #
+        #     csi_data_list.append(csi_data)
+        #
+        # return csi_data_list
 
-            for timestamp in range(num_time_steps):
-                csi_array = current_rx_data[:, :, timestamp]
-                csi_array = csi_array.copy()
-                frame = BaseFrame(timestamp=timestamp, csi_array=csi_array)
-                csi_data.add_frame(frame)
+        # New XRF55 .npy logic: keep all 3 Rx in one CSIData sample.
+        # Each frame stores (F, A) = (30, 9), where 9 = 3 Rx * 3 Ant.
+        csi_data = CSIData(file_path)
+        for timestamp in range(num_time_steps):
+            # reshaped_data[:, :, :, timestamp]: (Rx, Sub, Ant)
+            # Convert to (Sub, Rx, Ant) -> (30, 9), matching the .dat path.
+            csi_array = reshaped_data[:, :, :, timestamp].transpose(1, 0, 2).reshape(30, 9)
+            csi_array = csi_array.copy()
+            frame = BaseFrame(timestamp=timestamp, csi_array=csi_array)
+            csi_data.add_frame(frame)
 
-            csi_data_list.append(csi_data)
-
-        return csi_data_list
+        return [csi_data]

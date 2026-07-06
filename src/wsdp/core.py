@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
 from . import readers
+from .dataset_policy import is_amplitude_primary_dataset
 from .datasets import CSIDataset
 from .utils import load_params, train_model, resize_csi_to_fixed_length, load_custom_model
 from .utils.cache import get_cache_key, load_cache, save_cache
@@ -103,12 +104,19 @@ def _create_data_split(
     val_split: float,
     seed: int,
     use_simple_split: bool,
+    dataset: Optional[str] = None,
+    pipeline_steps: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Split data into train/val/test sets.
 
     Returns:
         (train_data, val_data, test_data, train_labels, val_labels, test_labels)
     """
+    if dataset == "xrf55":
+        return _create_xrf55_repetition_split(
+            processed_data, labels, groups, pipeline_steps=pipeline_steps
+        )
+
     if use_simple_split:
         train_data, temp_data, train_labels, temp_labels = train_test_split(
             processed_data, labels,
@@ -143,6 +151,84 @@ def _create_data_split(
     train_data = np.stack(train_data, axis=0)
     val_data = np.stack(val_data, axis=0)
     test_data = np.stack(test_data, axis=0)
+
+    return train_data, val_data, test_data, train_labels, val_labels, test_labels
+
+
+def _create_xrf55_repetition_split(
+    processed_data: np.ndarray,
+    labels: np.ndarray,
+    repetitions: np.ndarray,
+    pipeline_steps: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Split XRF55 by repetition/trial id.
+
+    XRF55 filenames are user_action_trial, e.g. 03_20_08.
+    The action id remains the label. The trial/repetition id controls the split:
+    01-12 -> train, 13-16 -> validation, 17-20 -> test.
+
+    If z-score or min-max normalization is configured, normalization is applied
+    after the repetition masks are built and uses only training repetitions for
+    statistics. This keeps validation/test repetitions out of the fitted scale.
+    """
+    repetitions = np.asarray(repetitions).astype(int)
+
+    # In older preprocessing flows groups may have been zero-indexed to 0-19.
+    # Convert that representation back to the filename's 1-20 trial ids.
+    unique_repetitions = sorted(set(repetitions.tolist()))
+    if unique_repetitions and unique_repetitions[0] == 0 and unique_repetitions[-1] == 19:
+        repetitions = repetitions + 1
+
+    invalid_mask = (repetitions < 1) | (repetitions > 20)
+    if np.any(invalid_mask):
+        invalid_values = sorted(set(repetitions[invalid_mask].tolist()))
+        raise ValueError(f"Unexpected XRF55 repetition ids: {invalid_values}")
+
+    train_mask = (repetitions >= 1) & (repetitions <= 12)
+    val_mask = (repetitions >= 13) & (repetitions <= 16)
+    test_mask = (repetitions >= 17) & (repetitions <= 20)
+
+    if not np.any(train_mask) or not np.any(val_mask) or not np.any(test_mask):
+        raise RuntimeError(
+            "XRF55 repetition split produced an empty split. "
+            "Expected trial ids 1-20 from user_action_trial filenames."
+        )
+
+    train_data = processed_data[train_mask]
+    val_data = processed_data[val_mask]
+    test_data = processed_data[test_mask]
+    train_labels = labels[train_mask]
+    val_labels = labels[val_mask]
+    test_labels = labels[test_mask]
+
+    normalize_step = None
+    if isinstance(pipeline_steps, dict):
+        normalize_step = pipeline_steps.get("normalize")
+
+    if isinstance(normalize_step, dict) and normalize_step.get("method") in {"z-score", "min-max"}:
+        method = normalize_step["method"]
+        train_amp = np.abs(train_data)
+        val_amp = np.abs(val_data)
+        test_amp = np.abs(test_data)
+
+        # XRF55-specific: compute one normalization scale from train split only.
+        # This avoids per-sample normalization washing out real amplitude
+        # differences, while keeping validation/test out of the statistics.
+        stat_axes = (0, 1) if train_amp.ndim >= 2 else (0,)
+        if method == "z-score":
+            mean = np.mean(train_amp, axis=stat_axes, keepdims=True)
+            std = np.std(train_amp, axis=stat_axes, keepdims=True)
+            std = np.where(std < 1e-10, 1.0, std)
+            train_data = (train_amp - mean) / std
+            val_data = (val_amp - mean) / std
+            test_data = (test_amp - mean) / std
+        else:
+            amin = np.min(train_amp, axis=stat_axes, keepdims=True)
+            amax = np.max(train_amp, axis=stat_axes, keepdims=True)
+            range_val = np.where((amax - amin) < 1e-10, 1.0, amax - amin)
+            train_data = (train_amp - amin) / range_val
+            val_data = (val_amp - amin) / range_val
+            test_data = (test_amp - amin) / range_val
 
     return train_data, val_data, test_data, train_labels, val_labels, test_labels
 
@@ -285,11 +371,24 @@ def pipeline(
     cached_result = None
     cache_key = None
     if use_cache:
+        # XRF55 now stores repetition_id as the split group. Add a version marker
+        # so old caches with user_id groups are not reused by accident.
+        cache_preprocess_config = resolved_pipeline_steps
+        if dataset_name == "xrf55":
+            cache_preprocess_config = {
+                "pipeline_steps": resolved_pipeline_steps,
+                "split_protocol": "xrf55_repetition_12_4_4_train_global_normalize",
+            }
+        elif dataset_name == "widar":
+            cache_preprocess_config = {
+                "pipeline_steps": resolved_pipeline_steps,
+                "split_protocol": "widar_condition_position_orientation_receiver",
+            }
         cache_key = get_cache_key(
             ipath,
             dataset_name,
             pad_len,
-            preprocess_config=resolved_pipeline_steps,
+            preprocess_config=cache_preprocess_config,
         )
         cached_result = load_cache(cache_dir, cache_key)
 
@@ -333,6 +432,8 @@ def pipeline(
             _create_data_split(
                 processed_data, zero_indexed_labels, zero_indexed_groups,
                 test_split, val_split, current_seed, use_simple_split,
+                dataset=dataset_name,
+                pipeline_steps=resolved_pipeline_steps,
             )
 
         logger.info(f"num of samples in train_data: {len(train_data)}, "
@@ -340,9 +441,20 @@ def pipeline(
         logger.info(f"shape of first sample of train_data: {train_data[0].shape}, "
                      f"shape of last sample of train_data: {train_data[-1].shape}")
 
-        train_dataset = CSIDataset(train_data, train_labels)
-        test_dataset = CSIDataset(test_data, test_labels)
-        val_dataset = CSIDataset(val_data, val_labels)
+        preserve_real_sign = (
+            is_amplitude_primary_dataset(dataset_name)
+            and isinstance(resolved_pipeline_steps, dict)
+            and resolved_pipeline_steps.get("normalize", {}).get("method") == "z-score"
+        )
+        train_dataset = CSIDataset(
+            train_data, train_labels, preserve_real_sign=preserve_real_sign
+        )
+        test_dataset = CSIDataset(
+            test_data, test_labels, preserve_real_sign=preserve_real_sign
+        )
+        val_dataset = CSIDataset(
+            val_data, val_labels, preserve_real_sign=preserve_real_sign
+        )
         train_loader = DataLoader(train_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)
         val_loader = DataLoader(val_dataset, batch_size=batch, num_workers=effective_num_workers, shuffle=False)

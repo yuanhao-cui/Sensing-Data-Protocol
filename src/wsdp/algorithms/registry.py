@@ -31,7 +31,7 @@ import importlib
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 
-import numpy as np
+from wsdp.dataset_policy import real_if_negligible_imaginary
 
 
 # ============================================================================
@@ -87,6 +87,23 @@ _ALGORITHM_REGISTRY: Dict[str, Dict[str, str]] = {
 
 # Direct function references for built-in algorithms (populated lazily)
 _custom_algorithms: Dict[str, Dict[str, Callable]] = {}
+
+_METHOD_KWARG_ALGORITHMS = {
+    ('normalize', 'z-score'),
+    ('normalize', 'min-max'),
+    ('interpolate', 'linear'),
+    ('interpolate', 'cubic'),
+    ('interpolate', 'nearest'),
+    ('outliers', 'iqr'),
+    ('outliers', 'z-score'),
+}
+
+_DATASET_KWARG_ALGORITHMS = {
+    ('calibrate', 'linear'),
+    ('interpolate', 'linear'),
+    ('interpolate', 'cubic'),
+    ('interpolate', 'nearest'),
+}
 
 
 # ============================================================================
@@ -373,7 +390,23 @@ def list_presets() -> Dict[str, list]:
     return {name: list(steps.keys()) for name, steps in PRESETS.items()}
 
 
-def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
+def _build_call_kwargs(
+    category: str,
+    method: str,
+    params: Dict[str, Any],
+    dataset: Optional[str],
+) -> Dict[str, Any]:
+    """Build explicit kwargs for registry algorithms with shared callables."""
+    call_kwargs = params.copy()
+    if (category, method) in _METHOD_KWARG_ALGORITHMS:
+        call_kwargs['method'] = method
+    if dataset == "xrf55" and (category, method) in _DATASET_KWARG_ALGORITHMS:
+        call_kwargs['dataset'] = dataset
+    return call_kwargs
+
+
+def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
+                     dataset: Optional[str] = None) -> Any:
     """
     Execute a processing pipeline on CSI data.
 
@@ -382,6 +415,8 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
     Args:
         csi: Input CSI array of shape (T, F, A)
         steps: Pipeline steps from apply_preset() or config file
+        dataset: Optional dataset name for dataset-aware steps and
+            amplitude-primary cleanup.
 
     Returns:
         Processed CSI array
@@ -410,17 +445,20 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]]) -> 'np.ndarray':
             params = steps[category].copy()
             method = params.pop('method')
             func = get_algorithm(category, method)
+            call_kwargs = _build_call_kwargs(category, method, params, dataset)
 
             if category == 'extract_features':
                 # extract_features returns a dict
-                features_result = func(result, **params)
+                features_result = func(result, **call_kwargs)
                 result = features_result  # Pass through for chaining
             elif category == 'detect':
                 # detect returns boolean arrays
-                detection_result = func(result, **params)
+                detection_result = func(result, **call_kwargs)
                 result = detection_result
             else:
-                result = func(result, **params)
+                result = func(result, **call_kwargs)
+
+            result = real_if_negligible_imaginary(result, dataset or "")
 
     return result
 

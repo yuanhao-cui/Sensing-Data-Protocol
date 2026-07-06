@@ -132,6 +132,7 @@ def run_hparam_search(
             _create_data_split(
                 processed_data, labels, groups,
                 test_split, val_split, seed, use_simple_split,
+                dataset=dataset,
             )
         )
 

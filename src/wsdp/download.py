@@ -1,15 +1,16 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import getpass
 import os
 import sys
-import getpass
-import urllib3
-import requests
+
 import kagglehub
+import requests
+import urllib3
+from tqdm import tqdm
+
+from .utils import load_api, load_mapping, download_ftp
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from .utils import load_api, load_mapping, download_ftp
 
 
 def download(dataset_name: str, dest: str, email: str = None, password: str = None, token: str = None, extensions: list = None):

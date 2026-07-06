@@ -37,6 +37,20 @@ All hyperparameters can be overridden via CLI:
 | Num Workers | `--num-workers` | `4` |
 | Use Cache | `--use-cache` | `False` |
 
+## Dataset Split Selectors
+
+The default processor derives a label and split group from each dataset's
+filename metadata. These groups are used by grouped train/validation/test
+splits, so custom readers or scripts should preserve the same selector
+contract:
+
+| Dataset | Label | Split group |
+|---------|-------|-------------|
+| `widar` | gesture type | `torso_position * 1000 + orientation * 100 + receiver_number` |
+| `gait` | user ID | `track_id * 100 + receiver_id` |
+| `xrf55` | action ID | repetition/trial ID |
+| `elderAL`, `zte` | action ID | position ID |
+
 ## Algorithm Presets
 
 Presets provide pre-configured algorithm pipelines for common scenarios. Use them via the Python API:

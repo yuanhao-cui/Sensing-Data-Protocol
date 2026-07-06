@@ -22,6 +22,7 @@ class ConfigurableProcessor:
         self.pipeline_steps = pipeline_steps
 
     def process(self, data_list, **kwargs):
+        """Process CSIData objects and return processed arrays, labels, and groups."""
         dataset = kwargs.get('dataset', '')
         all_data, all_labels, all_groups = [], [], []
 
@@ -60,6 +61,17 @@ def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
     if whole_csi.shape[0] < 2:
         return None, None, None
 
-    cleaned_csi = execute_pipeline(whole_csi, pipeline_steps)
+    effective_pipeline_steps = pipeline_steps
+    normalize_step = pipeline_steps.get("normalize", {})
+    if (
+        dataset == "xrf55"
+        and normalize_step.get("method") in {"z-score", "min-max"}
+    ):
+        effective_pipeline_steps = {
+            key: value for key, value in pipeline_steps.items()
+            if key != "normalize"
+        }
+
+    cleaned_csi = execute_pipeline(whole_csi, effective_pipeline_steps, dataset=dataset)
 
     return cleaned_csi, label, group

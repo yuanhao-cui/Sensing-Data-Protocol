@@ -2,53 +2,91 @@
 
 All notable changes to WSDP are documented here.
 
-## [0.5.0] — 2026-04-24
+## [0.5.0] — 2026-07-01
+
+### ✨ New Features
+
+#### Configurable Core Pipeline
+- The `pipeline()` entry point now supports freely configuring the model and algorithm preset via the Python API and CLI.
+- Added `ConfigurableProcessor` for user-defined algorithm pipelines:
+  ```python
+  from wsdp.processors import ConfigurableProcessor
+  processor = ConfigurableProcessor({'denoise': {'method': 'wavelet'},
+                                      'calibrate': {'method': 'stc'}})
+  ```
+- Added `test_tools/run_full_pipeline.py` as an end-to-end demonstration script covering data loading, algorithm preprocessing, grouped train/val/test splits, model training, and evaluation.
+
+#### Pipeline Record JSON Output
+- `pipeline()` can now emit a JSON record summarizing the executed algorithm steps and configuration, making experiments easier to reproduce and compare.
+
+#### Integration Test Runner
+- Added `test_tools/run_integration_tests.py` to exercise four datasets through four execution paths (direct `pipeline()` and CLI, with and without optional model/preset arguments).
+
+### 🔬 Scientific & Evaluation Protocol
+
+#### Dataset-Specific Preprocessing Policy
+- Introduced `src/wsdp/dataset_policy.py` with helpers for amplitude-primary datasets (currently `xrf55`).
+- `execute_pipeline()` now accepts an optional `dataset` argument and applies `real_if_negligible_imaginary()` for amplitude-primary datasets whose imaginary part is negligible.
+- `CSIDataset` gained a `preserve_real_sign` flag so that near-real complex arrays can keep their sign instead of being converted to amplitude.
+
+#### XRF55 Official-Style Repetition Split
+- Added `_create_xrf55_repetition_split()` in `src/wsdp/core.py`.
+- XRF55 filenames are parsed as `user_action_trial` (e.g. `03_20_08`); the trial/repetition id drives the split:
+  - Train: repetitions 01–12
+  - Validation: repetitions 13–16
+  - Test: repetitions 17–20
+- When z-score or min-max normalization is configured, statistics are fitted on the training repetitions only and applied to validation/test, preventing data leakage.
+- Cache keys for XRF55 now include a protocol marker so old caches are not reused after the switch to repetition-based splits.
+
+#### Condition and Repetition-Based Grouping
+- Updated `src/wsdp/processors/base_processor.py` to use dataset-specific split groups aligned with standard evaluation protocols:
+  - **Widar**: group = `position_id * 1000 + orientation_id * 100 + receiver_number` for condition-based splits.
+  - **Gait**: label = `user_id`, group = `track_id * 100 + receiver_id` for held-out conditions.
+  - **XRF55**: label = `action_id`, group = `repetition_id` for official trial splits.
+  - **ElderAL / ZTE**: group = `position_id`.
+
+#### XRF55 Reader Consolidates Receivers
+- `XrfReader._read_npy()` now keeps all 3 receivers in a single `CSIData` sample.
+- Each frame stores `(30, 9)` = (subcarrier, 3 receivers × 3 antennas) over 1000 timestamps, matching the `.dat` path layout.
 
 ### 🔧 Bug Fixes
 
 #### Wavelet Denoising 2D Input Support
-**Problem**: `wavelet_denoise_csi()` unconditionally unpacked `csi_tensor.shape` into 3 dimensions (`T, S, R`), causing failures on 2D `(T, F)` input — a long-standing gap between test coverage and implementation contract.
-
-**Fix**: Refactored the function to handle both 2D `(T, F)` and 3D `(T, F, A)` inputs. Single-antenna data is correctly processed without requiring an explicit trailing dimension.
-
-**Files changed**: `src/wsdp/algorithms/denoising.py`, `tests/test_all_algorithms_full.py`
+- `wavelet_denoise_csi()` now handles both 2D `(T, F)` and 3D `(T, F, A)` inputs, fixing failures on single-antenna data.
 
 #### Dataset Download Reliability
 - Added `allow_redirects=True` and `verify=False` to HTTP requests for environments with self-signed certificates or redirect chains.
-- Suppressed `InsecureRequestWarning` to avoid noise in logs when downloading datasets.
-- Fixed test patching logic for Python < 3.13 where `wsdp.download` function shadowed the module object, breaking `patch('wsdp.download.requests')`.
-
-**Files changed**: `src/wsdp/download.py`, `tests/test_download.py`
+- Suppressed `InsecureRequestWarning` noise during downloads.
+- Fixed test patching logic for Python < 3.13 where the `wsdp.download` function shadowed the module object.
 
 #### `interpolate()` Parameter Passing
-**Fix**: `interpolate()` now inspects the target function signature before passing `method=...`, preventing `TypeError` on registered interpolators that do not accept a `method` keyword.
+- `interpolate()` now inspects the target function signature before passing `method=...`, preventing `TypeError` on registered interpolators that do not accept a `method` keyword.
 
-**Files changed**: `src/wsdp/algorithms/__init__.py`
+#### Butterworth Filter Guard
+- `butterworth_denoise()` length guard changed from `T < min_len` to `T <= min_len` so sequences shorter than or equal to the required padding length are skipped cleanly.
 
-### 📖 Documentation & Consistency
+### 🛠 Engineering
 
-- **API docs overhaul**: `docs/api/core.md`, `docs/api/algorithms.md`, and `docs/api/readers.md` updated with full parameter tables, accurate signatures, and usage examples aligned with current code.
-- **User guide refresh**: `docs/user-guide/configuration.md` and `docs/getting-started/quickstart.md` rewritten to reflect the 6 built-in presets, custom model loading, and YAML config format.
-- **README expansion**: Added structured tutorial directory, user guide links, and reference sections in both English and Chinese.
-- **Doc/code sync**: Fixed mismatched function signatures in examples and tutorial notebook.
+- **Dependency bound**: Constrained `kagglehub` to `>=0.1,<1.0` in `pyproject.toml` to avoid incompatible 1.x releases in the supported Python matrix.
+- **Benchmark script**: Updated `scripts/benchmark_all_models.py` to pass `dataset=` to `_create_data_split()`.
+- **Hyperparameter search**: Updated `src/wsdp/utils/hparam_search.py` to pass `dataset=` to `_create_data_split()`.
+- **Integration runner**: Revised `test_tools/run_integration_tests.py` to execute all dataset/case combinations through `main()` and let pipeline/subprocess errors raise directly.
 
-### ✨ New Features
+### 🧹 Code Quality & Repository Hygiene
 
-#### Configurable Pipeline Processor
-- Introduced `ConfigurableProcessor` class for user-defined algorithm pipelines:
-  ```python
-  from configurable_processor import ConfigurableProcessor
-  processor = ConfigurableProcessor({'denoise': {'method': 'wavelet'},
-                                      'calibrate': {'method': 'stc'}})
-  ```
-- Ships with `run_full_pipeline.py` — an end-to-end demonstration script using real `xrf55` data, covering data loading, algorithm preprocessing, GroupShuffleSplit, model training, and evaluation. Supports switching algorithms via presets or custom dicts, and swapping models via name string.
+- Archived legacy `wsdp_old/` (29 modules) to `archive/`.
+- Removed 70 tracked MkDocs `site/` build artifacts from git.
+- Reorganized scattered root-level files into proper subdirectories.
+- Fixed Ruff lint errors across `src/wsdp/` — unused imports, dead variables, PEP 8 formatting, and import ordering.
+- Upgraded the synthetic CSI data generator to a physics-inspired model (static path + dynamic human-motion path + AWGN) for more realistic algorithm validation.
 
-### 🧹 Code Quality
+### 📖 Documentation
 
-- **Repository hygiene**: Archived legacy `wsdp_old/` (29 modules) to `archive/`; removed 70 tracked `site/` MkDocs build artifacts from git.
-- **Ruff lint compliance**: Fixed 22 files across `src/wsdp/` — removed unused imports (`torch.nn.functional`, `math`), eliminated dead variables, fixed PEP 8 formatting, and replaced lazy imports with top-level imports in `registry.py`.
-- **Processor robustness**: `base_processor._process_single_csi()` shape guards now explicitly protect against degenerate 1D data while preserving `(T, F, 1)` for single-antenna inputs.
-- **Full test suite**: Synthetic CSI data generator replaced with a physics-inspired model (static path + dynamic human-motion path + AWGN) for more realistic algorithm validation.
+- Expanded the Documentation & Resources section in `README.md`.
+- Updated API reference pages (`docs/api/core.md`, `docs/api/algorithms.md`, `docs/api/readers.md`) with parameter tables and current signatures.
+- Rewrote user guide pages (`docs/user-guide/configuration.md`, `docs/getting-started/quickstart.md`) for the 6 built-in presets, custom model loading, and YAML config format.
+- Added the Dataset Split Selectors table to `docs/user-guide/configuration.md` documenting the label/group contract for each built-in dataset.
+- Fixed mismatched function signatures in examples and the tutorial notebook.
 
 ## [0.4.0] — 2026-03-30
 

@@ -50,7 +50,7 @@ def butterworth_denoise(csi, order=5, cutoff=0.3):
         # (T, F)
         result = np.empty_like(csi)
         for f in range(csi.shape[1]):
-            if T < min_len:
+            if T <= min_len:
                 result[:, f] = csi[:, f]
             elif np.iscomplexobj(csi):
                 result[:, f] = filtfilt(b, a, np.real(csi[:, f])) + \
@@ -62,7 +62,7 @@ def butterworth_denoise(csi, order=5, cutoff=0.3):
         result = np.empty_like(csi)
         for f in range(csi.shape[1]):
             for a_idx in range(csi.shape[2]):
-                if T < min_len:
+                if T <= min_len:
                     result[:, f, a_idx] = csi[:, f, a_idx]
                 elif np.iscomplexobj(csi):
                     result[:, f, a_idx] = filtfilt(b, a, np.real(csi[:, f, a_idx])) + \
@@ -95,7 +95,8 @@ def butterworth_bandpass(csi, order=4, low_freq=0.5, high_freq=50.0, fs=1000.0):
         order: Filter order (default: 4)
         low_freq: Lower cutoff frequency in Hz (default: 0.5)
         high_freq: Upper cutoff frequency in Hz (default: 50.0)
-        fs: Sampling rate in Hz (default: 1000.0)
+        fs: Sampling rate in Hz. The default 1000.0 is a fallback; pass
+            the dataset/device sampling rate when it is known.
 
     Returns:
         np.ndarray: Bandpass-filtered CSI, same shape and dtype as input

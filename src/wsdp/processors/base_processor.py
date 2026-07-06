@@ -10,6 +10,7 @@ from typing import List
 
 from wsdp.algorithms import phase_calibration, wavelet_denoise_csi
 from wsdp.structure import CSIData
+from wsdp.dataset_policy import real_if_negligible_imaginary
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def _process_single_csi(csi_data, dataset):
             return None, None, None
         whole_csi = phase_calibration(whole_csi, dataset=dataset)
         cleaned_csi = wavelet_denoise_csi(whole_csi)
+        cleaned_csi = real_if_negligible_imaginary(cleaned_csi, dataset)
         return cleaned_csi, label, group
     return None, None, None
 
@@ -77,24 +79,28 @@ def _parse_file_info_from_filename(f_name, dataset):
             logger.warning(f"Skipping file {f_name}: Invalid format for Gesture Recognition.")
 
     elif dataset == 'gait':
-        # Parse for Gait Recognition (pattern "user{N}-{track}-{activity}-r{rep}.dat")
+        # Parse for Gait User ID (pattern "user{N}-{track}-{repetition}-r{receiver}.dat")
         m = re.search(r'user(\d+)-(\d+)-(\d+)-r(\d+)', base, re.IGNORECASE)
         if m:
             user_id = int(m.group(1))
             track_id = int(m.group(2))
-            activity_id = int(m.group(3))
-            rep_id = int(m.group(4))
+            repetition_id = int(m.group(3))
+            receiver_id = int(m.group(4))
 
-            return user_id, track_id, activity_id, rep_id, None, None
+            return user_id, track_id, repetition_id, receiver_id, None, None
         else:
             logger.warning(f"Skipping file {f_name}: Invalid format for Activity Recognition.")
 
     elif dataset == 'xrf55':
-        m = re.search(r'(\d+)_(\d+)_', base)
+        # XRF55 filenames are user_action_trial, e.g. 03_20_08.
+        # Keep trial/repetition so the core split can follow the official
+        # XRF55-style repetition protocol.
+        m = re.search(r'(\d+)_(\d+)_(\d+)', base)
         if m:
             user_id = int(m.group(1))
             action_id = int(m.group(2))
-            return user_id, action_id, None, None, None, None
+            repetition_id = int(m.group(3))
+            return user_id, action_id, repetition_id, None, None, None
         else:
             logger.warning(f"Skipping file {f_name}: Invalid format for xrf55.")
 
@@ -129,9 +135,9 @@ def _selector(res, dataset):
 
     Group variable determines how GroupShuffleSplit partitions data.
     Following standard evaluation protocols:
-    - Widar (Zheng et al., MobiSys 2019): group=user_id for cross-person eval
-    - Gait: group=user_id for person-independent evaluation
-    - XRF55: group=user_id (already correct)
+    - Widar: group=position_id*1000+orientation_id*100+receiver_id for condition split
+    - Gait: label=user_id and group=track_id*100+receiver_id for held-out conditions
+    - XRF55: label=action_id and group=repetition_id for official-style trial split
     - ElderAL/ZTE: group=position_id
 
     Args:
@@ -149,13 +155,15 @@ def _selector(res, dataset):
 
     if dataset == 'widar':
         label = int(res[1])   # gesture_type
-        group = int(res[0])   # user_id (cross-person generalization)
+        group = int(res[2]) * 1000 + int(res[3]) * 100 + int(res[5])
     elif dataset == 'gait':
-        label = int(res[2])   # activity_id (movement type)
-        group = int(res[0])   # user_id (person-independent evaluation)
+        label = int(res[0])   # user_id
+        group = int(res[1]) * 100 + int(res[3])   # track_id + receiver_id
     elif dataset == 'xrf55':
         label = int(res[1])   # action_id
-        group = int(res[0])   # user_id
+        # XRF55 official-style evaluation splits by repetition/trial:
+        # train 01-12, val 13-16, test 17-20.
+        group = int(res[2])   # repetition_id
     elif dataset in ('elderAL', 'zte'):
         label = int(res[2])   # action_id
         group = int(res[1])   # position_id
