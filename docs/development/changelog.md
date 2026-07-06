@@ -2,7 +2,18 @@
 
 See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-Scalable-Wireless-Sensing/blob/main/CHANGELOG.md) on GitHub for full version history.
 
-## v0.5.0 (2026-07-01)
+## v0.5.1 (2026-07-07)
+
+### Bug Fixes
+- **Test compatibility with `CSIDataset` signature**: Updated `DummyDataset` in
+  `tests/test_core_configuration.py` to accept `preserve_real_sign`.
+
+### New Features
+- **Backend presigned download URLs**: `download.py` now uses backend-generated
+  presigned URLs for OVHCloud/MinIO storage and no longer resolves S3 regions on
+  the client. Generic HEAD redirect handling is preserved.
+
+## v0.5.0 (2026-07-07)
 
 ### New Features
 - **Configurable pipeline**: `pipeline()` supports free model and algorithm selection; added `ConfigurableProcessor` for dict-based algorithm pipelines.
