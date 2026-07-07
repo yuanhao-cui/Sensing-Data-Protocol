@@ -6,7 +6,14 @@ See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-
 
 ### Bug Fixes
 - **Test compatibility with `CSIDataset` signature**: Updated `DummyDataset` in
-  `tests/test_core_configuration.py` to accept `preserve_real_sign`.
+  `tests/test_core_configuration.py` to accept the dataset-driven
+  `dataset_name` and `pipeline_steps` arguments.
+
+### Breaking Changes
+- **`CSIDataset` constructor**: Replaced
+  `(data_list, labels, use_phase=False, preserve_real_sign=False)` with
+  `(data_list, labels, dataset_name="", pipeline_steps=None)`. Widar and Gait
+  now use amplitude+phase channels automatically from dataset policy.
 
 ### New Features
 - **Backend presigned download URLs**: `download.py` now uses backend-generated
@@ -26,7 +33,9 @@ See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-
 - **XRF55 repetition split**: Added `_create_xrf55_repetition_split()` with train 01–12 / val 13–16 / test 17–20 and train-only normalization statistics.
 - **Condition/repetition grouping**: Widar uses position/orientation/receiver, Gait uses track/receiver, and XRF55 uses repetition id as the split group.
 - **XRF55 reader consolidation**: `.npy` reader returns one `CSIData` sample per file with shape `(1000, 30, 9)` (3 receivers × 3 antennas).
-- **`CSIDataset`**: Added `preserve_real_sign` flag for near-real complex inputs.
+- **`CSIDataset`**: Model inputs are now selected from `dataset_name` and
+  `pipeline_steps`, including automatic amplitude+phase channels for Widar/Gait
+  and dataset-specific amplitude handling for XRF55.
 
 ### Bug Fixes
 - **Wavelet denoising 2D input**: `wavelet_denoise_csi()` supports 2D `(T, F)` and 3D `(T, F, A)` inputs.
@@ -60,7 +69,7 @@ See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-
 - **Doppler spectrum**: STFT now operates on complex CSI (phase carries Doppler info)
 - **Shannon entropy**: Use probability mass (sum=1) instead of density (integral=1)
 - **Data leakage fix**: Widar/Gait grouping changed to user_id for cross-person evaluation
-- **Phase preservation**: CSIDataset supports amplitude+phase dual-channel via use_phase=True
+- **Phase preservation**: CSIDataset now supports amplitude+phase dual-channel inputs through dataset-driven Widar/Gait policy.
 - **BfeeReader tx/rx**: Antenna index mapping corrected to match Linux CSI Tool
 
 ### Engineering Fixes (Tier 1)

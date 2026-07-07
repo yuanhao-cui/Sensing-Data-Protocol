@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from wsdp.models.registry import MODEL_REGISTRY
 from wsdp.core import _load_and_preprocess, _create_data_split, _evaluate_model
-from wsdp.utils import load_params, resize_csi_to_fixed_length
+from wsdp.utils import load_params
 from wsdp.datasets import CSIDataset
 from wsdp.utils.train_func import train_model
 
@@ -102,7 +102,7 @@ def benchmark_model(model_name, model_class, processed_data, labels, groups,
                 ckpt = torch.load(cp_path, map_location=device)
                 model.load_state_dict(ckpt['model_state_dict'])
 
-            preds, true_labels, acc = _evaluate_model(model, test_loader, device)
+            _preds, _true_labels, acc = _evaluate_model(model, test_loader, device)
             accuracies.append(acc)
             print(f"  [{model_name}] seed={seed}: acc={acc:.4f}")
 
@@ -163,7 +163,7 @@ def main():
             model_for_count = model_class(num_classes=num_classes, input_shape=(T, F_dim, A_dim))
             n_params = sum(p.numel() for p in model_for_count.parameters()) / 1e6
             del model_for_count
-        except:
+        except Exception:
             pass
 
         print(f"\n{'='*60}")

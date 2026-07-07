@@ -46,7 +46,14 @@ def predict(
 
     Example:
         >>> csi = np.random.randn(100, 30, 3) + 1j * np.random.randn(100, 30, 3)
-        >>> preds = predict(csi, "best_checkpoint_42.pth", num_classes=6)
+        >>> steps = {"normalize": {"method": "z-score"}}
+        >>> preds = predict(
+        ...     csi,
+        ...     "best_checkpoint_42.pth",
+        ...     num_classes=6,
+        ...     dataset_name="widar",
+        ...     pipeline_steps=steps,
+        ... )
         >>> print(preds)  # e.g., array([3])
     """
     if device is None:

@@ -28,7 +28,7 @@ from wsdp.processors import ConfigurableProcessor
 from wsdp.models import create_model, list_models
 from wsdp.datasets import CSIDataset
 from wsdp.utils import resize_csi_to_fixed_length, train_model
-from wsdp.algorithms import apply_preset, list_algorithms
+from wsdp.algorithms import apply_preset
 
 # ==================== 配置区 ====================
 DATA_PATH = "data/xrf55"
@@ -73,7 +73,7 @@ def main():
     print(f"   共加载 {len(csi_data_list)} 个 CSI 样本")
 
     # Step 2: 使用 ConfigurableProcessor 处理数据
-    print(f"\n🔧 Step 2: 算法处理")
+    print("\n🔧 Step 2: 算法处理")
     print(f"   当前 pipeline: {pipeline_steps}")
     print("   💡 更换算法：修改上面的 pipeline_steps 字典")
     processor = ConfigurableProcessor(pipeline_steps)
@@ -100,7 +100,7 @@ def main():
     print(f"   类别数: {num_classes} (原始标签: {unique_labels})")
 
     # Step 4: 数据划分
-    print(f"\n✂️ Step 4: 数据集划分")
+    print("\n✂️ Step 4: 数据集划分")
     n_groups = len(set(groups))
     if n_groups < 3:
         print(f"   警告: 只有 {n_groups} 个 group，使用简单随机划分替代 GroupShuffleSplit")
@@ -156,7 +156,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # Step 6: 创建模型
-    print(f"\n🧠 Step 5: 创建模型")
+    print("\n🧠 Step 5: 创建模型")
     print(f"   当前模型: {MODEL_NAME}")
     print("   💡 更换模型：修改上面的 MODEL_NAME 变量")
     print("   可用模型示例:")
@@ -183,7 +183,7 @@ def main():
     checkpoint_path = "output/best_checkpoint_demo.pth"
     os.makedirs("output", exist_ok=True)
 
-    history = train_model(
+    train_model(
         model=model,
         criterion=criterion,
         optimizer=optimizer,
@@ -198,7 +198,7 @@ def main():
     print(f"   训练完成，最佳模型保存至: {checkpoint_path}")
 
     # Step 8: 评估
-    print(f"\n📊 Step 7: 测试集评估")
+    print("\n📊 Step 7: 测试集评估")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()

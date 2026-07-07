@@ -7,8 +7,17 @@ All notable changes to WSDP are documented here.
 ### 🔧 Bug Fixes
 
 - **Test compatibility with `CSIDataset` signature**: Updated `DummyDataset` in
-  `tests/test_core_configuration.py` to accept `preserve_real_sign`, matching the
-  keyword argument now passed by `pipeline()`.
+  `tests/test_core_configuration.py` to accept the dataset-driven
+  `dataset_name` and `pipeline_steps` arguments now passed by `pipeline()`.
+
+### ⚠️ Breaking Changes
+
+- **`CSIDataset` constructor**: Replaced the old
+  `(data_list, labels, use_phase=False, preserve_real_sign=False)` signature
+  with `(data_list, labels, dataset_name="", pipeline_steps=None)`. Widar and
+  Gait now use amplitude+phase channels automatically from `dataset_name` and
+  `pipeline_steps`; amplitude-primary datasets such as XRF55 keep their
+  dataset-specific representation.
 
 ### ✨ New Features
 
@@ -41,7 +50,7 @@ All notable changes to WSDP are documented here.
 #### Dataset-Specific Preprocessing Policy
 - Introduced `src/wsdp/dataset_policy.py` with helpers for amplitude-primary datasets (currently `xrf55`).
 - `execute_pipeline()` now accepts an optional `dataset` argument and applies `real_if_negligible_imaginary()` for amplitude-primary datasets whose imaginary part is negligible.
-- `CSIDataset` gained a `preserve_real_sign` flag so that near-real complex arrays can keep their sign instead of being converted to amplitude.
+- `CSIDataset` now derives its model input representation from `dataset_name` and `pipeline_steps`, enabling automatic amplitude+phase channels for Widar/Gait while preserving dataset-specific amplitude handling for XRF55.
 
 #### XRF55 Official-Style Repetition Split
 - Added `_create_xrf55_repetition_split()` in `src/wsdp/core.py`.
