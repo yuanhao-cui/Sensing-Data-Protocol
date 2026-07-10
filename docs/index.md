@@ -13,7 +13,7 @@ A Python library for downloading, processing, analyzing and training on Wi-Fi CS
 
 **Published and maintained by [SDP8.org](https://sdp8.org)** - the official platform for reproducible wireless sensing research.
 
-## 🆕 What's New in v0.4.0
+## 🆕 What's New in v0.5.1
 
 - **7 critical scientific bug fixes** -- corrected phase calibration, wavelet boundary handling, Doppler normalization, and more
 - **7 new SOTA models** -- THAT, CSITime, PA_CSI, WiFlexFormer, AttentionGRU, EI, FewSense (19 total)

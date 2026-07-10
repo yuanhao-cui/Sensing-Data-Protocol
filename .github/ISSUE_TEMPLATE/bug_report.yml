@@ -44,7 +44,7 @@ body:
       placeholder: |
         - OS: [e.g., macOS, Linux, Windows]
         - Python version: [e.g., 3.11]
-        - WSDP version: [e.g., 0.2.0]
+        - WSDP version: [e.g., 0.5.1]
         - PyTorch version: [e.g., 2.0]
     validations:
       required: true

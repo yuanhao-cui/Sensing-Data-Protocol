@@ -46,7 +46,7 @@ If you use SDP in your research, please cite:
 <a id="english"></a>
 # 🇬🇧 English
 
-## 🆕 What's New in v0.4.0
+## 🆕 What's New in v0.5.1
 
 - **7 critical scientific bug fixes** -- corrected phase calibration, wavelet boundary handling, Doppler normalization, and more
 - **7 new SOTA models** -- THAT, CSITime, PA_CSI, WiFlexFormer, AttentionGRU, EI, FewSense (19 total)
@@ -563,7 +563,7 @@ SDP enforces **deterministic calibration and denoising**, guaranteeing:
 - [x] **v0.2** - 5 datasets support, CLI tool
 - [x] **v0.3** - More datasets (WiFi-HAR, CSI-HAR, etc.)
 - [x] **v0.4** - 19 models, 26+ algorithms, leaderboard, CI/CD, scientific bug fixes
-- [ ] **v0.5** - PyPI official release, online demo platform
+- [x] **v0.5** - PyPI official release, online demo platform
 - [ ] **v1.0** - Full protocol standardization
 
 **Want a specific dataset?** [Open an issue](https://github.com/yuanhao-cui/Sensing-Data-Protocol-for-Scalable-Wireless-Sensing/issues) and let us know!
@@ -588,7 +588,7 @@ MIT License - see [LICENSE](LICENSE) file.
 <a id="中文"></a>
 # 🇨🇳 中文
 
-## 🆕 v0.4.0 更新内容
+## 🆕 v0.5.1 更新内容
 
 - **7 个关键科学 bug 修复** -- 修正相位校准、小波边界处理、多普勒归一化等问题
 - **7 个新 SOTA 模型** -- THAT, CSITime, PA_CSI, WiFlexFormer, AttentionGRU, EI, FewSense（共 19 个）
@@ -1019,7 +1019,7 @@ SDP 强制执行**确定性校准和去噪**，保证：
 - [x] **v0.2** - 5 个数据集支持，CLI 工具
 - [x] **v0.3** - 更多数据集（WiFi-HAR、CSI-HAR 等）
 - [x] **v0.4** - 19 个模型，26+ 算法，排行榜，CI/CD，科学 bug 修复
-- [ ] **v0.5** - PyPI 正式发布，在线演示平台
+- [x] **v0.5** - PyPI 正式发布，在线演示平台
 - [ ] **v1.0** - 完整协议标准化
 
 **想要特定数据集？** [提交 issue](https://github.com/yuanhao-cui/Sensing-Data-Protocol-for-Scalable-Wireless-Sensing/issues) 告诉我们！
