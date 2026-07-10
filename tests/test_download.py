@@ -48,3 +48,35 @@ class TestDownloadAuth:
                 payload = call_args[1]['json']
                 assert payload['email'] == "user@test.com"
                 assert payload['password'] == "secret"
+
+    def test_widar_uses_auth_api_not_ftp(self):
+        """widar should skip the FTP path and use the auth API directly."""
+        with patch.object(_download_module, 'load_mapping', return_value="Widar3.0-part.zip"), \
+             patch.object(_download_module, '_download_without_aws') as mock_no_aws, \
+             patch.object(_download_module, 'load_api', return_value="https://api.test/auth"), \
+             patch.object(_download_module, 'requests') as mock_req:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.text = "https://bucket.url/Widar3.0-part.zip"
+            mock_req.post.return_value = mock_resp
+
+            with patch.object(_download_module, '_download_file_from_url') as mock_dl:
+                download("widar", "/tmp", token="my-jwt-token")
+                mock_no_aws.assert_not_called()
+                mock_dl.assert_called_once_with("https://bucket.url/Widar3.0-part.zip", "/tmp", "Widar3.0-part.zip")
+
+    def test_gait_uses_auth_api_not_ftp(self):
+        """gait should skip the FTP path and use the auth API directly."""
+        with patch.object(_download_module, 'load_mapping', return_value="GaitID.zip"), \
+             patch.object(_download_module, '_download_without_aws') as mock_no_aws, \
+             patch.object(_download_module, 'load_api', return_value="https://api.test/auth"), \
+             patch.object(_download_module, 'requests') as mock_req:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.text = "https://bucket.url/GaitID.zip"
+            mock_req.post.return_value = mock_resp
+
+            with patch.object(_download_module, '_download_file_from_url') as mock_dl:
+                download("gait", "/tmp", token="my-jwt-token")
+                mock_no_aws.assert_not_called()
+                mock_dl.assert_called_once_with("https://bucket.url/GaitID.zip", "/tmp", "GaitID.zip")

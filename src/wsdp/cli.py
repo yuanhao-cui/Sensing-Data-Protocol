@@ -1,9 +1,10 @@
 import argparse
 import json
 import os
+import sys
 
 from .core import pipeline
-from .download import download
+from .download import download, AUTH_REQUIRED_DATASETS, DownloadError
 from .readers import list_datasets, get_all_reader_metadata
 from . import __version__
 
@@ -47,16 +48,15 @@ def _download_pipeline(args: argparse.Namespace) -> None:
         print(f"error: unknown dataset '{dataset}'. Available: {', '.join(datasets)}")
         return
 
-    # elderAL requires authentication (SDP8 platform)
-    if dataset == "elderAL" and not args.token and not os.environ.get("WSDP_TOKEN"):
+    if dataset in AUTH_REQUIRED_DATASETS and not args.token and not os.environ.get("WSDP_TOKEN"):
         if not args.email or not args.password:
-            print("error: dataset 'elderAL' requires authentication.")
+            print(f"error: dataset '{dataset}' requires authentication.")
             print("Please provide --email and --password, or --token / WSDP_TOKEN env var.")
             print()
             print("Examples:")
-            print("  wsdp download elderAL ./data --email user@example.com --password 'yourpass'")
-            print("  wsdp download elderAL ./data --token <jwt_token>")
-            print("  export WSDP_TOKEN=<jwt_token> && wsdp download elderAL ./data")
+            print(f"  wsdp download {dataset} ./data --email user@example.com --password 'yourpass'")
+            print(f"  wsdp download {dataset} ./data --token <jwt_token>")
+            print(f"  export WSDP_TOKEN=<jwt_token> && wsdp download {dataset} ./data")
             return
 
     # Parse extensions filter
@@ -67,14 +67,18 @@ def _download_pipeline(args: argparse.Namespace) -> None:
             print("error: --ext values must start with '.' (e.g. '.csv,.mat')")
             return
 
-    download(
-        args.dataset_name,
-        args.dest,
-        email=args.email,
-        password=args.password,
-        token=args.token,
-        extensions=extensions,
-    )
+    try:
+        download(
+            args.dataset_name,
+            args.dest,
+            email=args.email,
+            password=args.password,
+            token=args.token,
+            extensions=extensions,
+        )
+    except DownloadError as e:
+        print(f"error: {e}")
+        sys.exit(1)
 
 
 def _list_datasets(args: argparse.Namespace) -> None:

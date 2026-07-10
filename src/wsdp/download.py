@@ -8,9 +8,17 @@ import requests
 import urllib3
 from tqdm import tqdm
 
-from .utils import load_api, load_mapping, download_ftp
+from .utils import load_api, load_mapping
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class DownloadError(Exception):
+    """Raised when a dataset download fails."""
+    pass
+
+
+AUTH_REQUIRED_DATASETS = {'elderAL', 'widar', 'gait'}
 
 
 def download(dataset_name: str, dest: str, email: str = None, password: str = None, token: str = None, extensions: list = None):
@@ -32,9 +40,9 @@ def download(dataset_name: str, dest: str, email: str = None, password: str = No
                     Only FTP datasets support this filter.
     """
     dn = load_mapping(dataset_name)
-    if dataset_name != 'elderAL':
+    if dataset_name not in AUTH_REQUIRED_DATASETS:
         try:
-            _download_without_aws(dataset_name, dest, extensions=extensions)
+            _download_without_aws(dataset_name, dest)
             return
         except Exception as e:
             print(f"Error occurred when tried to download with other sources: {e}, try to download with SDP Storage\n")
@@ -94,14 +102,14 @@ def download(dataset_name: str, dest: str, email: str = None, password: str = No
             url = response.text
             _download_file_from_url(url, dest, dn)
         elif response.status_code == 401:
-            print("Authentication failed, incorrect credentials or token")
+            raise DownloadError("Authentication failed, incorrect credentials or token")
         elif response.status_code == 404:
-            print("Specified dataset does not exist")
+            raise DownloadError("Specified dataset does not exist")
         else:
-            print(f"Error: {response.status_code} - {response.text}")
+            raise DownloadError(f"Error: {response.status_code} - {response.text}")
 
     except requests.exceptions.RequestException as e:
-        print(f"Connection error: {e}")
+        raise DownloadError(f"Connection error: {e}") from e
 
 
 def _download_file_from_url(url, dest, file_name):
@@ -194,12 +202,8 @@ def _single_thread_download(url, dest, file_name):
             os.remove(dest)
 
 
-def _download_without_aws(dataset_name: str, dest: str, extensions: list = None):
-    if dataset_name == 'widar':
-        download_ftp(dataset_name, dest, extensions=extensions)
-    elif dataset_name == 'gait':
-        download_ftp(dataset_name, dest, extensions=extensions)
-    elif dataset_name == 'xrf55':
+def _download_without_aws(dataset_name: str, dest: str):
+    if dataset_name == 'xrf55':
         os.environ['KAGGLEHUB_CACHE'] = dest
         print(f"os.environ['KAGGLEHUB_CACHE'] is changed to {dest}")
         path = kagglehub.dataset_download("xrfdataset/xrf55-rawdata")
