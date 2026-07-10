@@ -78,3 +78,32 @@ class TestNonInteractiveMode:
         with patch('sys.argv', ['wsdp', 'download', '-h']):
             with pytest.raises(SystemExit):
                 main_cli()
+
+
+class TestDownloadAuth:
+    def test_download_widar_requires_auth(self, capsys):
+        """widar without credentials should be rejected."""
+        with patch('sys.argv', ['wsdp', 'download', 'widar', './data']), \
+             patch('wsdp.cli.download') as mock_download:
+            main_cli()
+        captured = capsys.readouterr()
+        assert "requires authentication" in captured.out
+        mock_download.assert_not_called()
+
+    def test_download_gait_requires_auth(self, capsys):
+        """gait without credentials should be rejected."""
+        with patch('sys.argv', ['wsdp', 'download', 'gait', './data']), \
+             patch('wsdp.cli.download') as mock_download:
+            main_cli()
+        captured = capsys.readouterr()
+        assert "requires authentication" in captured.out
+        mock_download.assert_not_called()
+
+    def test_download_gait_token_allowed(self):
+        """gait with a token should be forwarded to download()."""
+        with patch('sys.argv', ['wsdp', 'download', 'gait', './data', '--token', 't']), \
+             patch('wsdp.cli.download') as mock_download:
+            main_cli()
+        mock_download.assert_called_once_with(
+            'gait', './data', email=None, password=None, token='t', extensions=None
+        )

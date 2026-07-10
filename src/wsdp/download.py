@@ -32,7 +32,7 @@ def download(dataset_name: str, dest: str, email: str = None, password: str = No
                     Only FTP datasets support this filter.
     """
     dn = load_mapping(dataset_name)
-    if dataset_name != 'elderAL':
+    if dataset_name not in ('elderAL', 'widar', 'gait'):
         try:
             _download_without_aws(dataset_name, dest, extensions=extensions)
             return
