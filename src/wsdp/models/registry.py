@@ -1,13 +1,16 @@
 """Pluggable model registry for WSDP."""
 
-from typing import Dict, Type, Optional
+from typing import Any, Dict, Type
 import torch.nn as nn
 
-# Global registry: {lowercase_name: (category, model_class)}
+from wsdp.interfaces import ModelBuilder
+from .builders import ClassModelBuilder
+
+# Global registry: {lowercase_name: (category, builder)}
 MODEL_REGISTRY: Dict[str, tuple] = {}
 
 
-def register_model(category: str, name: str, model_class: Type[nn.Module]):
+def register_model(category: str, name: str, model_class: Type[nn.Module]) -> None:
     """Register a model class in the global registry.
 
     Args:
@@ -18,7 +21,28 @@ def register_model(category: str, name: str, model_class: Type[nn.Module]):
     key = name.lower()
     if key in MODEL_REGISTRY:
         raise ValueError(f"Model '{name}' already registered.")
-    MODEL_REGISTRY[key] = (category.lower(), model_class)
+    builder = ClassModelBuilder(name, model_class)
+    MODEL_REGISTRY[key] = (category.lower(), builder)
+
+
+def register_model_builder(category: str, name: str, builder: ModelBuilder) -> None:
+    """Register a custom model builder.
+
+    Args:
+        category: Model category.
+        name: Human-readable model name.
+        builder: ``ModelBuilder`` instance.
+    """
+    key = name.lower()
+    if key in MODEL_REGISTRY:
+        raise ValueError(f"Model '{name}' already registered.")
+    MODEL_REGISTRY[key] = (category.lower(), builder)
+
+
+def unregister_model(name: str) -> bool:
+    """Remove a model registration, returning whether it existed."""
+    key = name.lower()
+    return MODEL_REGISTRY.pop(key, None) is not None
 
 
 def get_model(name: str, **kwargs) -> nn.Module:
@@ -38,11 +62,26 @@ def get_model(name: str, **kwargs) -> nn.Module:
     if key not in MODEL_REGISTRY:
         available = ", ".join(sorted(MODEL_REGISTRY.keys()))
         raise KeyError(f"Unknown model '{name}'. Available: {available}")
-    _, model_class = MODEL_REGISTRY[key]
-    return model_class(**kwargs)
+    _, builder = MODEL_REGISTRY[key]
+    return builder.build(**kwargs)
 
 
-def list_models(category: Optional[str] = None) -> Dict[str, str]:
+def create_model(name: str, num_classes: int, input_shape: tuple, **kwargs) -> nn.Module:
+    """Create a model by name with unified interface.
+
+    Args:
+        name: Model name from registry (case-insensitive).
+        num_classes: Number of output classes.
+        input_shape: (T, F, A) tuple — time steps, frequency bins, antennas.
+        **kwargs: Extra model-specific hyperparameters.
+
+    Returns:
+        nn.Module instance.
+    """
+    return get_model(name, num_classes=num_classes, input_shape=input_shape, **kwargs)
+
+
+def list_models(category: str | None = None) -> Dict[str, str]:
     """List all registered models, optionally filtered by category.
 
     Args:
@@ -56,3 +95,13 @@ def list_models(category: Optional[str] = None) -> Dict[str, str]:
         if category is None or cat == category.lower():
             result[name] = cat
     return result
+
+
+def get_model_builder(name: str) -> ModelBuilder:
+    """Return the builder registered under ``name``."""
+    key = name.lower()
+    if key not in MODEL_REGISTRY:
+        available = ", ".join(sorted(MODEL_REGISTRY.keys()))
+        raise KeyError(f"Unknown model '{name}'. Available: {available}")
+    _, builder = MODEL_REGISTRY[key]
+    return builder

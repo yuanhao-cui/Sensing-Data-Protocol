@@ -1,0 +1,47 @@
+# WSDP Modular Pipeline Configuration Examples
+#
+# The pipeline is expressed as a category-dict. Each category corresponds to
+# one processing stage. Omitting a category skips that stage, so different
+# users/datasets can pick algorithms flexibly:
+#
+#   User 1 (A1B1C1): wavelet + linear + z-score
+#   User 2 (A2B3C2): butterworth + robust + min-max
+#   User 3 (A2C1):   wavelet + z-score (skip calibration)
+#
+# Available categories: denoise, outliers, calibrate, normalize,
+#                       interpolate, extract_features, detect
+
+# --- Example: User 1 (A1B1C1) ---
+denoise:
+  method: wavelet
+  params:
+    level: 2
+
+calibrate:
+  method: linear
+
+normalize:
+  method: z-score
+
+# --- Example: User 2 (A2B3C2) ---
+# denoise:
+#   method: butterworth
+#   params:
+#     order: 4
+#     cutoff: 0.25
+#
+# calibrate:
+#   method: robust
+#
+# normalize:
+#   method: min-max
+
+# --- Example: User 3 (A2C1) ---
+# denoise:
+#   method: wavelet
+#
+# normalize:
+#   method: z-score
+
+# --- Option: Use a preset (uncomment to use) ---
+# preset: high_quality

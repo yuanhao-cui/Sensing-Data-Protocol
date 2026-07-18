@@ -28,6 +28,8 @@ def _run_pipeline(args: argparse.Namespace) -> None:
         kwargs['algorithm_config_file'] = args.algorithm_config
     if args.algorithm_preset is not None:
         kwargs['algorithm_preset'] = args.algorithm_preset
+    if args.reader is not None:
+        kwargs['reader'] = args.reader
     
     pipeline(
         input_path=args.input_path,
@@ -140,6 +142,10 @@ def main_cli() -> None:
     parser_run.add_argument(
         "--algorithm-preset", type=str, default=None,
         help="algorithm preset name, e.g. high_quality, fast, robust"
+    )
+    parser_run.add_argument(
+        "--reader", type=str, default=None,
+        help="registered reader name or dataset alias to use for loading input files"
     )
     parser_run.add_argument(
         "--lr", "--learning-rate", dest="learning_rate", type=float, default=None,

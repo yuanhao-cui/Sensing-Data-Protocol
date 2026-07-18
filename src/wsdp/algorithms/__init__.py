@@ -67,6 +67,10 @@ from .registry import (
     PRESETS,
 )
 
+# Modular pipeline imports
+from .pipeline import AlgorithmStep, execute_algorithm_steps
+from .adapter import FunctionAlgorithm
+
 
 # ============================================================================
 # Unified API
@@ -294,4 +298,8 @@ __all__ = [
     "list_presets",
     "execute_pipeline",
     "PRESETS",
+    # Modular pipeline
+    "AlgorithmStep",
+    "execute_algorithm_steps",
+    "FunctionAlgorithm",
 ]

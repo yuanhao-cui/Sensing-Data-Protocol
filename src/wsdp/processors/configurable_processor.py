@@ -1,16 +1,17 @@
-"""ConfigurableProcessor: run a user-defined algorithm pipeline over a list of CSIData."""
+"""ConfigurableProcessor: run a user-defined algorithm pipeline over CSIData."""
 
-from concurrent.futures import ProcessPoolExecutor
-from functools import partial
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from wsdp.algorithms import execute_pipeline
-from wsdp.algorithms.amplitude import normalize_amplitude
-from wsdp.dataset_policy import pipeline_uses_zscore, uses_phase_amplitude
+from wsdp.algorithms import AlgorithmStep, normalize_amplitude
+from wsdp.config.pipeline_config import build_steps_from_config
+from wsdp.dataset_policy import uses_phase_amplitude
+from wsdp.interfaces import Processor
+from wsdp.processors.modular_processor import ModularProcessor
 
 
-class ConfigurableProcessor:
+class ConfigurableProcessor(Processor):
     """Processor that applies a user-defined algorithm pipeline to each CSI sample.
 
     Widar and Gait use amplitude-phase model inputs automatically. When their
@@ -24,75 +25,62 @@ class ConfigurableProcessor:
              'normalize': {'method': 'z-score'}}
     """
 
-    def __init__(self, pipeline_steps):
+    def __init__(self, pipeline_steps: Dict[str, Dict[str, Any]]):
         self.pipeline_steps = pipeline_steps
 
-    def process(self, data_list, **kwargs):
+    def process(
+        self,
+        data_list: List[Any],
+        **kwargs,
+    ) -> Tuple[List[np.ndarray], List[Any], List[Any]]:
         """Process CSIData objects and return processed arrays, labels, and groups."""
-        dataset = kwargs.get('dataset', '')
-        all_data, all_labels, all_groups = [], [], []
+        dataset = kwargs.get("dataset", "")
+        steps, phase_zscore = self._resolve_steps(dataset)
 
-        worker_func = partial(
-            _process_single_csi_configurable,
-            dataset=dataset,
-            pipeline_steps=self.pipeline_steps,
+        processor = ModularProcessor(steps, n_workers=4)
+        all_data, all_labels, all_groups = processor.process(
+            data_list, dataset=dataset
         )
 
-        with ProcessPoolExecutor(max_workers=4) as executor:
-            results = executor.map(worker_func, data_list)
-            for csi, label, group in results:
-                if csi is not None:
-                    all_data.append(csi)
-                    all_labels.append(label)
-                    all_groups.append(group)
+        if phase_zscore:
+            all_data = [
+                normalize_amplitude(arr, method="z-score", return_phase_channels=True)
+                for arr in all_data
+            ]
+
         return all_data, all_labels, all_groups
 
+    def _resolve_steps(
+        self, dataset: str
+    ) -> Tuple[List[AlgorithmStep], bool]:
+        """Build the effective step list and whether to apply phase-zscore."""
+        normalize_step = self.pipeline_steps.get("normalize", {})
 
-def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
-    """Worker: parse one CSIData, build (T, F, A) tensor, run configured pipeline."""
-    from wsdp.processors.base_processor import _parse_file_info_from_filename, _selector
-
-    res = _parse_file_info_from_filename(csi_data.file_name, dataset)
-    label, group = _selector(res, dataset)
-
-    sorted_frames = sorted(csi_data.frames, key=lambda f: f.timestamp)
-    frame_tensors = [f.csi_array for f in sorted_frames]
-
-    if not frame_tensors:
-        return None, None, None
-
-    whole_csi = np.stack(frame_tensors, axis=0)
-    if whole_csi.ndim == 2:
-        whole_csi = np.expand_dims(whole_csi, -1)
-    if whole_csi.shape[0] < 2:
-        return None, None, None
-
-    phase_zscore = (
-        uses_phase_amplitude(dataset)
-        and pipeline_uses_zscore(pipeline_steps)
-    )
-
-    effective_pipeline_steps = pipeline_steps
-    normalize_step = pipeline_steps.get("normalize", {})
-    if (
-        phase_zscore
-        or (
+        phase_zscore = (
+            uses_phase_amplitude(dataset)
+            and normalize_step.get("method") == "z-score"
+        )
+        xrf55_skip_normalize = (
             dataset == "xrf55"
             and normalize_step.get("method") in {"z-score", "min-max"}
         )
-    ):
-        effective_pipeline_steps = {
-            key: value for key, value in pipeline_steps.items()
-            if key != "normalize"
-        }
+        skip_normalize = phase_zscore or xrf55_skip_normalize
 
-    cleaned_csi = execute_pipeline(whole_csi, effective_pipeline_steps, dataset=dataset)
+        effective = dict(self.pipeline_steps)
+        if skip_normalize:
+            effective.pop("normalize", None)
 
-    if phase_zscore:
-        cleaned_csi = normalize_amplitude(
-            cleaned_csi,
-            method="z-score",
-            return_phase_channels=True,
-        )
+        steps = build_steps_from_config(effective)
+        return steps, phase_zscore
 
-    return cleaned_csi, label, group
+
+def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
+    """Backward-compatible worker: process one CSIData with a configurable pipeline.
+
+    This function is kept for tests and external callers that import it
+    directly. New code should use ``ConfigurableProcessor`` or
+    ``ModularProcessor`` instead.
+    """
+    processor = ConfigurableProcessor(pipeline_steps)
+    res = processor.process([csi_data], dataset=dataset)
+    return res[0][0], res[1][0], res[2][0]

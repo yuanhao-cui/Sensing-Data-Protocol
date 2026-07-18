@@ -26,84 +26,112 @@ Usage:
     >>> from wsdp.algorithms import apply_preset
     >>> steps = apply_preset('high_quality')
 """
-import json
+import dataclasses
 import importlib
+import inspect
+import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 
 from wsdp.dataset_policy import real_if_negligible_imaginary
+from .adapter import FunctionAlgorithm, filter_kwargs
 
 
 # ============================================================================
 # Algorithm Registry
 # ============================================================================
 
+@dataclasses.dataclass(frozen=True)
+class _AlgorithmEntry:
+    """Internal record for one registered algorithm."""
+
+    ref: str
+    pass_dataset: bool = False
+    pass_method: bool = False
+
+
 # Lazy-loaded function cache
 _algorithm_cache: Dict[str, Dict[str, Callable]] = {}
 
-# Registry of algorithm string references (module:function)
-_ALGORITHM_REGISTRY: Dict[str, Dict[str, str]] = {
+# Registry of algorithm string references (module:function) plus adapter flags.
+_ALGORITHM_REGISTRY: Dict[str, Dict[str, _AlgorithmEntry]] = {
     'denoise': {
-        'wavelet': 'wsdp.algorithms.denoising:wavelet_denoise_csi',
-        'butterworth': 'wsdp.algorithms.denoising_butterworth:butterworth_denoise',
-        'savgol': 'wsdp.algorithms.denoising_butterworth:savgol_denoise',
-        'bandpass': 'wsdp.algorithms.denoising_butterworth:butterworth_bandpass',
-        'hampel': 'wsdp.algorithms.amplitude:hampel_filter',
+        'wavelet': _AlgorithmEntry('wsdp.algorithms.denoising:wavelet_denoise_csi'),
+        'butterworth': _AlgorithmEntry('wsdp.algorithms.denoising_butterworth:butterworth_denoise'),
+        'savgol': _AlgorithmEntry('wsdp.algorithms.denoising_butterworth:savgol_denoise'),
+        'bandpass': _AlgorithmEntry('wsdp.algorithms.denoising_butterworth:butterworth_bandpass'),
+        'hampel': _AlgorithmEntry('wsdp.algorithms.amplitude:hampel_filter'),
     },
     'calibrate': {
-        'linear': 'wsdp.algorithms.phase_calibration:phase_calibration',
-        'polynomial': 'wsdp.algorithms.phase:polynomial_calibration',
-        'stc': 'wsdp.algorithms.phase:stc_calibration',
-        'robust': 'wsdp.algorithms.phase:robust_phase_sanitization',
+        'linear': _AlgorithmEntry(
+            'wsdp.algorithms.phase_calibration:phase_calibration',
+            pass_dataset=True,
+        ),
+        'polynomial': _AlgorithmEntry(
+            'wsdp.algorithms.phase:polynomial_calibration',
+            pass_dataset=True,
+        ),
+        'stc': _AlgorithmEntry(
+            'wsdp.algorithms.phase:stc_calibration',
+            pass_dataset=True,
+        ),
+        'robust': _AlgorithmEntry('wsdp.algorithms.phase:robust_phase_sanitization'),
     },
     'normalize': {
-        'z-score': 'wsdp.algorithms.amplitude:normalize_amplitude',
-        'min-max': 'wsdp.algorithms.amplitude:normalize_amplitude',
-        'agc': 'wsdp.algorithms.amplitude:agc_compensate',
+        'z-score': _AlgorithmEntry(
+            'wsdp.algorithms.amplitude:normalize_amplitude',
+            pass_method=True,
+        ),
+        'min-max': _AlgorithmEntry(
+            'wsdp.algorithms.amplitude:normalize_amplitude',
+            pass_method=True,
+        ),
+        'agc': _AlgorithmEntry('wsdp.algorithms.amplitude:agc_compensate'),
     },
     'interpolate': {
-        'linear': 'wsdp.algorithms.interpolation:interpolate_grid',
-        'cubic': 'wsdp.algorithms.interpolation:interpolate_grid',
-        'nearest': 'wsdp.algorithms.interpolation:interpolate_grid',
-        'decimate': 'wsdp.algorithms.interpolation:decimate_antialias',
+        'linear': _AlgorithmEntry(
+            'wsdp.algorithms.interpolation:interpolate_grid',
+            pass_dataset=True,
+            pass_method=True,
+        ),
+        'cubic': _AlgorithmEntry(
+            'wsdp.algorithms.interpolation:interpolate_grid',
+            pass_dataset=True,
+            pass_method=True,
+        ),
+        'nearest': _AlgorithmEntry(
+            'wsdp.algorithms.interpolation:interpolate_grid',
+            pass_dataset=True,
+            pass_method=True,
+        ),
+        'decimate': _AlgorithmEntry('wsdp.algorithms.interpolation:decimate_antialias'),
     },
     'extract_features': {
-        'doppler': 'wsdp.algorithms.features:doppler_spectrum',
-        'entropy': 'wsdp.algorithms.features:entropy_features',
-        'ratio': 'wsdp.algorithms.features:csi_ratio',
-        'decomposition': 'wsdp.algorithms.features:tensor_decomposition',
-        'conjugate_multiply': 'wsdp.algorithms.features:conjugate_multiply',
-        'pca_fusion': 'wsdp.algorithms.features:pca_subcarrier_fusion',
+        'doppler': _AlgorithmEntry('wsdp.algorithms.features:doppler_spectrum'),
+        'entropy': _AlgorithmEntry('wsdp.algorithms.features:entropy_features'),
+        'ratio': _AlgorithmEntry('wsdp.algorithms.features:csi_ratio'),
+        'decomposition': _AlgorithmEntry('wsdp.algorithms.features:tensor_decomposition'),
+        'conjugate_multiply': _AlgorithmEntry('wsdp.algorithms.features:conjugate_multiply'),
+        'pca_fusion': _AlgorithmEntry('wsdp.algorithms.features:pca_subcarrier_fusion'),
     },
     'detect': {
-        'activity': 'wsdp.algorithms.detection:detect_activity',
-        'change_point': 'wsdp.algorithms.detection:change_point_detection',
+        'activity': _AlgorithmEntry('wsdp.algorithms.detection:detect_activity'),
+        'change_point': _AlgorithmEntry('wsdp.algorithms.detection:change_point_detection'),
     },
     'outliers': {
-        'iqr': 'wsdp.algorithms.amplitude:remove_outliers',
-        'z-score': 'wsdp.algorithms.amplitude:remove_outliers',
+        'iqr': _AlgorithmEntry(
+            'wsdp.algorithms.amplitude:remove_outliers',
+            pass_method=True,
+        ),
+        'z-score': _AlgorithmEntry(
+            'wsdp.algorithms.amplitude:remove_outliers',
+            pass_method=True,
+        ),
     },
 }
 
 # Direct function references for built-in algorithms (populated lazily)
 _custom_algorithms: Dict[str, Dict[str, Callable]] = {}
-
-_METHOD_KWARG_ALGORITHMS = {
-    ('normalize', 'z-score'),
-    ('normalize', 'min-max'),
-    ('interpolate', 'linear'),
-    ('interpolate', 'cubic'),
-    ('interpolate', 'nearest'),
-    ('outliers', 'iqr'),
-    ('outliers', 'z-score'),
-}
-
-_DATASET_KWARG_ALGORITHMS = {
-    ('calibrate', 'linear'),
-    ('interpolate', 'linear'),
-    ('interpolate', 'cubic'),
-    ('interpolate', 'nearest'),
-}
 
 
 # ============================================================================
@@ -130,6 +158,8 @@ def register_algorithm(
     category: str,
     name: str,
     func: Callable,
+    pass_dataset: bool = False,
+    pass_method: bool = False,
 ) -> None:
     """
     Register a custom algorithm.
@@ -142,6 +172,9 @@ def register_algorithm(
             'interpolate', 'extract_features', 'detect', 'outliers')
         name: Algorithm name (used as method= parameter)
         func: Callable that implements the algorithm
+        pass_dataset: If True, the dataset name is injected into the call.
+        pass_method: If True, the registered method name is injected into the
+            call. Useful when one function dispatches across multiple methods.
 
     Raises:
         ValueError: If category is not a known category
@@ -158,7 +191,12 @@ def register_algorithm(
     """
     if category not in _custom_algorithms:
         _custom_algorithms[category] = {}
-    _custom_algorithms[category][name] = func
+    _custom_algorithms[category][name] = FunctionAlgorithm(
+        func,
+        method=name,
+        pass_dataset=pass_dataset,
+        pass_method=pass_method,
+    )
 
 
 def unregister_algorithm(category: str, name: str) -> bool:
@@ -217,8 +255,17 @@ def get_algorithm(category: str, name: str) -> Callable:
 
     # Check built-in registry
     if category in _ALGORITHM_REGISTRY and name in _ALGORITHM_REGISTRY[category]:
-        ref = _ALGORITHM_REGISTRY[category][name]
-        return _resolve_algorithm(ref)
+        entry = _ALGORITHM_REGISTRY[category][name]
+        cache_key = f"{category}:{name}"
+        if cache_key not in _algorithm_cache:
+            func = _resolve_algorithm(entry.ref)
+            _algorithm_cache[cache_key] = FunctionAlgorithm(
+                func,
+                method=name,
+                pass_dataset=entry.pass_dataset,
+                pass_method=entry.pass_method,
+            )
+        return _algorithm_cache[cache_key]
 
     # Build error message with available options
     available = list_algorithms(category) if category in _ALGORITHM_REGISTRY or category in _custom_algorithms else {}
@@ -250,7 +297,9 @@ def list_algorithms(category: Optional[str] = None) -> Dict[str, Any]:
     if category is not None:
         result = {}
         if category in _ALGORITHM_REGISTRY:
-            result.update(_ALGORITHM_REGISTRY[category])
+            result.update({
+                name: entry.ref for name, entry in _ALGORITHM_REGISTRY[category].items()
+            })
         if category in _custom_algorithms:
             for name, func in _custom_algorithms[category].items():
                 result[name] = f"{func.__module__}:{func.__name__}"
@@ -390,19 +439,13 @@ def list_presets() -> Dict[str, list]:
     return {name: list(steps.keys()) for name, steps in PRESETS.items()}
 
 
-def _build_call_kwargs(
-    category: str,
-    method: str,
-    params: Dict[str, Any],
-    dataset: Optional[str],
-) -> Dict[str, Any]:
-    """Build explicit kwargs for registry algorithms with shared callables."""
-    call_kwargs = params.copy()
-    if (category, method) in _METHOD_KWARG_ALGORITHMS:
-        call_kwargs['method'] = method
-    if dataset == "xrf55" and (category, method) in _DATASET_KWARG_ALGORITHMS:
-        call_kwargs['dataset'] = dataset
-    return call_kwargs
+# ============================================================================
+# Pipeline Execution
+# ============================================================================
+
+from .pipeline import AlgorithmStep, execute_algorithm_steps
+from .adapter import FunctionAlgorithm, filter_kwargs
+from ..config.pipeline_config import CATEGORY_ORDER, build_steps_from_config
 
 
 def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
@@ -410,7 +453,7 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
     """
     Execute a processing pipeline on CSI data.
 
-    Applies each processing step in order (denoise → calibrate → normalize → ...).
+    Applies each processing step in order (denoise → outliers → calibrate → ...).
 
     Args:
         csi: Input CSI array of shape (T, F, A)
@@ -434,31 +477,15 @@ def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
         >>> processed = execute_pipeline(csi, steps)
     """
 
-    result = csi.copy()
+    algorithm_steps = build_steps_from_config(steps)
+    state = execute_algorithm_steps(
+        csi,
+        algorithm_steps,
+        dataset=dataset or "",
+    )
 
-    # Define execution order
-    order = ['denoise', 'outliers', 'calibrate', 'normalize', 'interpolate',
-             'extract_features', 'detect']
-
-    for category in order:
-        if category in steps:
-            params = steps[category].copy()
-            method = params.pop('method')
-            func = get_algorithm(category, method)
-            call_kwargs = _build_call_kwargs(category, method, params, dataset)
-
-            if category == 'extract_features':
-                # extract_features returns a dict
-                features_result = func(result, **call_kwargs)
-                result = features_result  # Pass through for chaining
-            elif category == 'detect':
-                # detect returns boolean arrays
-                detection_result = func(result, **call_kwargs)
-                result = detection_result
-            else:
-                result = func(result, **call_kwargs)
-
-            result = real_if_negligible_imaginary(result, dataset or "")
+    result = state.get('csi', csi)
+    result = real_if_negligible_imaginary(result, dataset or "")
 
     return result
 
@@ -560,8 +587,7 @@ def _parse_config(raw_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         return steps
 
     # Parse pipeline steps
-    valid_categories = {'denoise', 'calibrate', 'normalize', 'interpolate',
-                        'extract_features', 'detect', 'outliers'}
+    valid_categories = set(CATEGORY_ORDER)
     steps = {}
 
     for category, config in raw_config.items():
@@ -650,15 +676,17 @@ def algorithm_info(category: str, name: str) -> Dict[str, Any]:
         Dictionary with algorithm metadata (docstring, module, signature)
     """
     func = get_algorithm(category, name)
-    import inspect
+    target = func
+    if isinstance(func, FunctionAlgorithm):
+        target = func.func
 
     return {
         'name': name,
         'category': category,
-        'module': func.__module__,
-        'function': func.__name__,
-        'docstring': (func.__doc__ or '').strip(),
-        'signature': str(inspect.signature(func)),
+        'module': target.__module__,
+        'function': target.__name__,
+        'docstring': (target.__doc__ or '').strip(),
+        'signature': str(inspect.signature(target)),
         'is_custom': (category in _custom_algorithms and
                       name in _custom_algorithms.get(category, {})),
     }
