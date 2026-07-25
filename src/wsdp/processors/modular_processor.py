@@ -64,13 +64,10 @@ def _process_single_modular(
     res = parse_file_info_from_filename(csi_data.file_name, dataset)
     label, group = select_label_and_group(res, dataset)
 
-    sorted_frames = sorted(csi_data.frames, key=lambda f: f.timestamp)
-    frame_tensors = [f.csi_array for f in sorted_frames]
-
-    if not frame_tensors:
+    if not csi_data.frames:
         return None, None, None
 
-    whole_csi = np.stack(frame_tensors, axis=0)
+    whole_csi = csi_data.to_numpy()
     if whole_csi.ndim == 2:
         whole_csi = np.expand_dims(whole_csi, -1)
     if whole_csi.shape[0] < 2:

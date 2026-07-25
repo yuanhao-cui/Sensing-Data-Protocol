@@ -35,8 +35,6 @@ class FunctionAlgorithm:
         pass_dataset: bool = False,
         pass_method: bool = False,
     ):
-        if not callable(func):
-            raise TypeError("func must be callable")
         self.func = func
         self.method = method
         self.pass_dataset = pass_dataset

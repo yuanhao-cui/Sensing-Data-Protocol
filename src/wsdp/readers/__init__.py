@@ -103,9 +103,8 @@ def list_datasets() -> List[str]:
     return sorted(_READER_REGISTRY.keys())
 
 
-def list_readers() -> List[str]:
-    """List all registered canonical dataset names."""
-    return list_datasets()
+# Backward-compatible alias for listing canonical dataset names.
+list_readers = list_datasets
 
 
 def get_all_reader_metadata(dataset: str) -> dict:

@@ -6,7 +6,7 @@ import numpy as np
 
 from wsdp.algorithms import AlgorithmStep, normalize_amplitude
 from wsdp.config.pipeline_config import build_steps_from_config
-from wsdp.dataset_policy import uses_phase_amplitude
+from wsdp.dataset_policy import pipeline_uses_zscore, uses_phase_amplitude
 from wsdp.interfaces import Processor
 from wsdp.processors.modular_processor import ModularProcessor
 
@@ -58,7 +58,7 @@ class ConfigurableProcessor(Processor):
 
         phase_zscore = (
             uses_phase_amplitude(dataset)
-            and normalize_step.get("method") == "z-score"
+            and pipeline_uses_zscore(self.pipeline_steps)
         )
         xrf55_skip_normalize = (
             dataset == "xrf55"

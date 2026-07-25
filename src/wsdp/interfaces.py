@@ -1,8 +1,8 @@
 """Public component interfaces for WSDP.
 
 This module defines the abstract contracts used across readers, processors,
-models, and algorithms. Keeping the contracts in one place makes it easy to
-swap implementations without coupling to concrete classes.
+and models. Keeping the contracts in one place makes it easy to swap
+implementations without coupling to concrete classes.
 """
 
 from abc import ABC, abstractmethod
@@ -64,26 +64,3 @@ class ModelBuilder(ABC):
     def get_name(self) -> str:
         """Return the model name for records and logging."""
         ...
-
-
-class Algorithm(ABC):
-    """Single processing step in a CSI pipeline.
-
-    Algorithms operate on numpy arrays and return numpy arrays. Concrete
-    implementations may wrap existing functions via adapters.
-    """
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Human-readable step identifier, e.g. 'denoise:wavelet'."""
-        ...
-
-    @abstractmethod
-    def process(self, csi: np.ndarray, *, dataset: str = "", **kwargs) -> np.ndarray:
-        """Process a CSI array and return a numpy array."""
-        ...
-
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return algorithm metadata."""
-        return {"name": self.name, "class": self.__class__.__name__}

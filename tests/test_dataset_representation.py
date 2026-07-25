@@ -2,13 +2,14 @@
 
 import inspect
 import unittest
-from types import SimpleNamespace
 
 import numpy as np
 
 from wsdp.algorithms.amplitude import normalize_amplitude
 from wsdp.dataset_policy import pipeline_uses_zscore, uses_phase_amplitude
 from wsdp.datasets import CSIDataset
+from wsdp.structure import CSIData
+from wsdp.structure.CSIFrame import BaseFrame
 from wsdp.processors.configurable_processor import (
     _process_single_csi_configurable,
 )
@@ -37,11 +38,10 @@ def _complex_sample():
 
 def _csi_data(file_name):
     csi, _, _ = _complex_sample()
-    frames = [
-        SimpleNamespace(timestamp=index, csi_array=csi[index])
-        for index in range(csi.shape[0])
-    ]
-    return SimpleNamespace(file_name=file_name, frames=frames)
+    data = CSIData(file_name)
+    for index in range(csi.shape[0]):
+        data.add_frame(BaseFrame(timestamp=index, csi_array=csi[index]))
+    return data
 
 
 class DatasetRepresentationTests(unittest.TestCase):

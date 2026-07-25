@@ -32,22 +32,17 @@ def build_steps_from_config(steps: Dict[str, Dict[str, Any]]) -> List[AlgorithmS
     Returns:
         Ordered list of ``AlgorithmStep`` instances.
     """
+    ordered_categories = CATEGORY_ORDER + [
+        category for category in steps if category not in CATEGORY_ORDER
+    ]
     ordered = []
-    for category in CATEGORY_ORDER:
-        if category in steps:
-            params = steps[category].copy()
-            method = params.pop("method")
-            ordered.append(
-                AlgorithmStep(category=category, method=method, params=params)
-            )
-
-    # Preserve any user-defined categories in insertion order.
-    for category in steps:
-        if category not in CATEGORY_ORDER:
-            params = steps[category].copy()
-            method = params.pop("method")
-            ordered.append(
-                AlgorithmStep(category=category, method=method, params=params)
-            )
+    for category in ordered_categories:
+        if category not in steps:
+            continue
+        params = steps[category].copy()
+        method = params.pop("method")
+        ordered.append(
+            AlgorithmStep(category=category, method=method, params=params)
+        )
 
     return ordered

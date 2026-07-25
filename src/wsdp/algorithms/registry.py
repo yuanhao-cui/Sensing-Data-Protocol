@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 
 from wsdp.dataset_policy import real_if_negligible_imaginary
-from .adapter import FunctionAlgorithm, filter_kwargs
+from .adapter import FunctionAlgorithm
 
 
 # ============================================================================
@@ -51,7 +51,7 @@ class _AlgorithmEntry:
 
 
 # Lazy-loaded function cache
-_algorithm_cache: Dict[str, Dict[str, Callable]] = {}
+_algorithm_cache: Dict[str, Callable] = {}
 
 # Registry of algorithm string references (module:function) plus adapter flags.
 _ALGORITHM_REGISTRY: Dict[str, Dict[str, _AlgorithmEntry]] = {
@@ -444,7 +444,6 @@ def list_presets() -> Dict[str, list]:
 # ============================================================================
 
 from .pipeline import AlgorithmStep, execute_algorithm_steps
-from .adapter import FunctionAlgorithm, filter_kwargs
 from ..config.pipeline_config import CATEGORY_ORDER, build_steps_from_config
 
 

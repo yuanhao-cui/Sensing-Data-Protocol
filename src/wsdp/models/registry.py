@@ -1,6 +1,6 @@
 """Pluggable model registry for WSDP."""
 
-from typing import Any, Dict, Type
+from typing import Dict, Type
 import torch.nn as nn
 
 from wsdp.interfaces import ModelBuilder
@@ -8,6 +8,14 @@ from .builders import ClassModelBuilder
 
 # Global registry: {lowercase_name: (category, builder)}
 MODEL_REGISTRY: Dict[str, tuple] = {}
+
+
+def _register(category: str, name: str, builder: ModelBuilder) -> None:
+    """Store a model builder under its lower-cased name."""
+    key = name.lower()
+    if key in MODEL_REGISTRY:
+        raise ValueError(f"Model '{name}' already registered.")
+    MODEL_REGISTRY[key] = (category.lower(), builder)
 
 
 def register_model(category: str, name: str, model_class: Type[nn.Module]) -> None:
@@ -18,11 +26,7 @@ def register_model(category: str, name: str, model_class: Type[nn.Module]) -> No
         name: Human-readable model name.
         model_class: nn.Module subclass.
     """
-    key = name.lower()
-    if key in MODEL_REGISTRY:
-        raise ValueError(f"Model '{name}' already registered.")
-    builder = ClassModelBuilder(name, model_class)
-    MODEL_REGISTRY[key] = (category.lower(), builder)
+    _register(category, name, ClassModelBuilder(name, model_class))
 
 
 def register_model_builder(category: str, name: str, builder: ModelBuilder) -> None:
@@ -33,10 +37,7 @@ def register_model_builder(category: str, name: str, builder: ModelBuilder) -> N
         name: Human-readable model name.
         builder: ``ModelBuilder`` instance.
     """
-    key = name.lower()
-    if key in MODEL_REGISTRY:
-        raise ValueError(f"Model '{name}' already registered.")
-    MODEL_REGISTRY[key] = (category.lower(), builder)
+    _register(category, name, builder)
 
 
 def unregister_model(name: str) -> bool:
