@@ -3,14 +3,11 @@
 from .registry import (
     MODEL_REGISTRY,
     register_model,
-    register_model_builder,
     unregister_model,
     get_model,
-    get_model_builder,
     list_models,
     create_model,
 )
-from .builders import ClassModelBuilder, CustomModelBuilder, ModelBuilder
 from .csi_model import CSIModel
 from .baselines import MLPModel, CNN1DModel, CNN2DModel, LSTMModel
 from .mainstream import ResNet1D, ResNet2D, BiLSTMAttention, EfficientNetCSI
@@ -23,16 +20,10 @@ __all__ = [
     # Registry
     "MODEL_REGISTRY",
     "register_model",
-    "register_model_builder",
     "unregister_model",
     "get_model",
-    "get_model_builder",
     "list_models",
     "create_model",
-    # Builders
-    "ClassModelBuilder",
-    "CustomModelBuilder",
-    "ModelBuilder",
     # Baseline models
     "MLPModel", "CNN1DModel", "CNN2DModel", "LSTMModel",
     # Mainstream models

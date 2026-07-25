@@ -3,19 +3,8 @@
 from typing import Dict, Type
 import torch.nn as nn
 
-from wsdp.interfaces import ModelBuilder
-from .builders import ClassModelBuilder
-
-# Global registry: {lowercase_name: (category, builder)}
+# Global registry: {lowercase_name: (category, model_class)}
 MODEL_REGISTRY: Dict[str, tuple] = {}
-
-
-def _register(category: str, name: str, builder: ModelBuilder) -> None:
-    """Store a model builder under its lower-cased name."""
-    key = name.lower()
-    if key in MODEL_REGISTRY:
-        raise ValueError(f"Model '{name}' already registered.")
-    MODEL_REGISTRY[key] = (category.lower(), builder)
 
 
 def register_model(category: str, name: str, model_class: Type[nn.Module]) -> None:
@@ -26,18 +15,10 @@ def register_model(category: str, name: str, model_class: Type[nn.Module]) -> No
         name: Human-readable model name.
         model_class: nn.Module subclass.
     """
-    _register(category, name, ClassModelBuilder(name, model_class))
-
-
-def register_model_builder(category: str, name: str, builder: ModelBuilder) -> None:
-    """Register a custom model builder.
-
-    Args:
-        category: Model category.
-        name: Human-readable model name.
-        builder: ``ModelBuilder`` instance.
-    """
-    _register(category, name, builder)
+    key = name.lower()
+    if key in MODEL_REGISTRY:
+        raise ValueError(f"Model '{name}' already registered.")
+    MODEL_REGISTRY[key] = (category.lower(), model_class)
 
 
 def unregister_model(name: str) -> bool:
@@ -63,8 +44,8 @@ def get_model(name: str, **kwargs) -> nn.Module:
     if key not in MODEL_REGISTRY:
         available = ", ".join(sorted(MODEL_REGISTRY.keys()))
         raise KeyError(f"Unknown model '{name}'. Available: {available}")
-    _, builder = MODEL_REGISTRY[key]
-    return builder.build(**kwargs)
+    _, model_class = MODEL_REGISTRY[key]
+    return model_class(**kwargs)
 
 
 def create_model(name: str, num_classes: int, input_shape: tuple, **kwargs) -> nn.Module:
@@ -96,13 +77,3 @@ def list_models(category: str | None = None) -> Dict[str, str]:
         if category is None or cat == category.lower():
             result[name] = cat
     return result
-
-
-def get_model_builder(name: str) -> ModelBuilder:
-    """Return the builder registered under ``name``."""
-    key = name.lower()
-    if key not in MODEL_REGISTRY:
-        available = ", ".join(sorted(MODEL_REGISTRY.keys()))
-        raise KeyError(f"Unknown model '{name}'. Available: {available}")
-    _, builder = MODEL_REGISTRY[key]
-    return builder

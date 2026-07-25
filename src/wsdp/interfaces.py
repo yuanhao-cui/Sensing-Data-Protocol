@@ -1,7 +1,7 @@
 """Public component interfaces for WSDP.
 
-This module defines the abstract contracts used across readers, processors,
-and models. Keeping the contracts in one place makes it easy to swap
+This module defines the abstract contracts used across readers and
+processors. Keeping the contracts in one place makes it easy to swap
 implementations without coupling to concrete classes.
 """
 
@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
-import torch.nn as nn
 
 
 class Reader(ABC):
@@ -47,20 +46,4 @@ class Processor(ABC):
         self, data_list: List[Any], **kwargs
     ) -> Tuple[List[np.ndarray], List[Any], List[Any]]:
         """Process CSIData objects and return arrays, labels, and groups."""
-        ...
-
-
-class ModelBuilder(ABC):
-    """Pluggable model builder: constructs a model from dataset metadata."""
-
-    @abstractmethod
-    def build(
-        self, num_classes: int, input_shape: Tuple[int, ...], **kwargs
-    ) -> nn.Module:
-        """Build and return a model instance."""
-        ...
-
-    @abstractmethod
-    def get_name(self) -> str:
-        """Return the model name for records and logging."""
         ...
