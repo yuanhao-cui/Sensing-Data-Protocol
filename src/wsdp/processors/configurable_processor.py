@@ -4,8 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from wsdp.algorithms import AlgorithmStep, normalize_amplitude
-from wsdp.config.pipeline_config import build_steps_from_config
+from wsdp.algorithms import AlgorithmStep, build_steps_from_config, normalize_amplitude
 from wsdp.dataset_policy import pipeline_uses_zscore, uses_phase_amplitude
 from wsdp.interfaces import Processor
 from wsdp.processors.modular_processor import ModularProcessor
@@ -25,8 +24,9 @@ class ConfigurableProcessor(Processor):
              'normalize': {'method': 'z-score'}}
     """
 
-    def __init__(self, pipeline_steps: Dict[str, Dict[str, Any]]):
+    def __init__(self, pipeline_steps: Dict[str, Dict[str, Any]], n_workers: int = 4):
         self.pipeline_steps = pipeline_steps
+        self.n_workers = n_workers
 
     def process(
         self,
@@ -37,7 +37,7 @@ class ConfigurableProcessor(Processor):
         dataset = kwargs.get("dataset", "")
         steps, phase_zscore = self._resolve_steps(dataset)
 
-        processor = ModularProcessor(steps, n_workers=4)
+        processor = ModularProcessor(steps, n_workers=self.n_workers)
         all_data, all_labels, all_groups = processor.process(
             data_list, dataset=dataset
         )
@@ -81,6 +81,8 @@ def _process_single_csi_configurable(csi_data, dataset, pipeline_steps):
     directly. New code should use ``ConfigurableProcessor`` or
     ``ModularProcessor`` instead.
     """
-    processor = ConfigurableProcessor(pipeline_steps)
-    res = processor.process([csi_data], dataset=dataset)
-    return res[0][0], res[1][0], res[2][0]
+    processor = ConfigurableProcessor(pipeline_steps, n_workers=1)
+    data, labels, groups = processor.process([csi_data], dataset=dataset)
+    if not data:
+        return None, None, None
+    return data[0], labels[0], groups[0]

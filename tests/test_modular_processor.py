@@ -1,7 +1,6 @@
 """Tests for the modular processor and flexible algorithm combinations."""
 
 import numpy as np
-import pytest
 
 from wsdp.algorithms import (
     AlgorithmStep,
@@ -103,31 +102,23 @@ class TestConfigurableProcessorBackwardCompatibility:
 
 
 class TestExecuteAlgorithmSteps:
-    def test_state_routing(self):
+    def test_chains_steps_and_returns_array(self):
         csi = np.random.randn(20, 30, 3) + 1j * np.random.randn(20, 30, 3)
         steps = [
-            AlgorithmStep(
-                category="denoise",
-                method="wavelet",
-                output_key="cleaned",
-            ),
-            AlgorithmStep(
-                category="calibrate",
-                method="linear",
-                input_key="cleaned",
-                output_key="csi",
-            ),
-        ]
-        state = execute_algorithm_steps(csi, steps, dataset="xrf55")
-        assert "cleaned" in state
-        assert "csi" in state
-        assert state["csi"].shape == csi.shape
-
-    def test_disabled_step_is_skipped(self):
-        csi = np.random.randn(20, 30, 3) + 1j * np.random.randn(20, 30, 3)
-        steps = [
-            AlgorithmStep(category="denoise", method="wavelet", enabled=False),
+            AlgorithmStep(category="denoise", method="wavelet"),
             AlgorithmStep(category="calibrate", method="linear"),
         ]
-        state = execute_algorithm_steps(csi, steps, dataset="xrf55")
-        assert state["csi"].shape == csi.shape
+        result = execute_algorithm_steps(csi, steps, dataset="xrf55")
+        assert isinstance(result, np.ndarray)
+        assert result.shape == csi.shape
+
+    def test_empty_steps_returns_input(self):
+        csi = np.random.randn(20, 30, 3)
+        result = execute_algorithm_steps(csi, [], dataset="xrf55")
+        assert result is csi
+
+    def test_mapping_step_config(self):
+        csi = np.random.randn(20, 30, 3) + 1j * np.random.randn(20, 30, 3)
+        steps = [{"category": "denoise", "method": "wavelet"}]
+        result = execute_algorithm_steps(csi, steps, dataset="xrf55")
+        assert result.shape == csi.shape

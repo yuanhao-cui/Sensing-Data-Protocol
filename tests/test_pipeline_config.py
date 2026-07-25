@@ -1,9 +1,7 @@
 """Tests for pipeline configuration parsing."""
 
-import pytest
-
-from wsdp.algorithms import AlgorithmStep
-from wsdp.config.pipeline_config import CATEGORY_ORDER, build_steps_from_config
+from wsdp.algorithms import AlgorithmStep, build_steps_from_config
+from wsdp.algorithms.registry import CATEGORY_ORDER
 
 
 class TestBuildStepsFromConfig:

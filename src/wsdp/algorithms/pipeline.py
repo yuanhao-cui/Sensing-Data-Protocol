@@ -1,21 +1,25 @@
-"""Ordered, state-driven algorithm pipeline execution.
+"""Configurable algorithm pipeline execution.
 
-This module introduces ``AlgorithmStep``, a small dataclass that describes one
-processing step, and ``execute_algorithm_steps``, which runs steps in order
-while maintaining a mutable state dictionary. Steps can read from and write to
-named state keys, making it easy to route data between heterogeneous stages
-without hard-coding a global execution order.
+This module provides ``AlgorithmStep``, a small dataclass describing one
+processing step, plus helpers that turn the user-facing category-dict config
+into an ordered step list and execute it as a simple chain::
+
+    result = step_n(... step_2(step_1(csi)))
+
+Dependency direction is one-way: this module depends on ``registry``
+(for ``get_algorithm`` and ``CATEGORY_ORDER``), never the reverse.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from .registry import get_algorithm
+from wsdp.dataset_policy import real_if_negligible_imaginary
+from .registry import CATEGORY_ORDER, get_algorithm
 
 
 @dataclass(frozen=True)
@@ -26,19 +30,11 @@ class AlgorithmStep:
         category: Algorithm category, e.g. ``denoise`` or ``calibrate``.
         method: Method name within the category, e.g. ``wavelet``.
         params: Method-specific keyword arguments.
-        input_key: Name of the state entry to use as input (default ``csi``).
-        output_key: Name(s) of the state entry to write. Can be a single
-            string or a sequence of strings when the step returns multiple
-            values.
-        enabled: If False, the step is skipped.
     """
 
     category: str
     method: str
     params: Mapping[str, Any] = field(default_factory=dict)
-    input_key: str = "csi"
-    output_key: str | Sequence[str] = "csi"
-    enabled: bool = True
 
     @property
     def name(self) -> str:
@@ -46,107 +42,108 @@ class AlgorithmStep:
         return f"{self.category}:{self.method}"
 
     @classmethod
-    def from_config(
-        cls,
-        config: AlgorithmStep | Mapping[str, Any] | Sequence[Any],
-    ) -> AlgorithmStep:
-        """Create a step from a dataclass, mapping, or tuple-like config."""
+    def from_config(cls, config: AlgorithmStep | Mapping[str, Any]) -> AlgorithmStep:
+        """Create a step from an ``AlgorithmStep`` or a mapping config.
+
+        Mapping keys ``category`` and ``method`` are required; ``params`` is
+        optional. Any extra keys are merged into ``params`` for convenience.
+        """
         if isinstance(config, cls):
             return config
 
         if isinstance(config, Mapping):
             params: dict[str, Any] = dict(config.get("params", {}))
             for key, value in config.items():
-                if key not in {
-                    "category",
-                    "method",
-                    "params",
-                    "input_key",
-                    "output_key",
-                    "enabled",
-                }:
+                if key not in {"category", "method", "params"}:
                     params[key] = value
             return cls(
                 category=str(config["category"]),
                 method=str(config["method"]),
                 params=params,
-                input_key=str(config.get("input_key", "csi")),
-                output_key=config.get("output_key", "csi"),
-                enabled=bool(config.get("enabled", True)),
             )
-
-        if isinstance(config, Sequence) and not isinstance(config, (str, bytes)):
-            if len(config) < 2:
-                raise ValueError("step tuple must contain at least category and method")
-            tuple_params = config[2] if len(config) > 2 else {}
-            return cls(str(config[0]), str(config[1]), dict(tuple_params))
 
         raise TypeError(f"unsupported step config: {type(config)!r}")
 
 
-def _assign_output(
-    state: dict[str, Any],
-    output_key: str | Sequence[str],
-    value: Any,
-) -> None:
-    """Write a step result into the state dictionary."""
-    if isinstance(output_key, str):
-        state[output_key] = value
-        return
+def build_steps_from_config(steps: Dict[str, Dict[str, Any]]) -> List[AlgorithmStep]:
+    """Convert a category-dict pipeline config into an ordered step list.
 
-    keys = list(output_key)
-    if not isinstance(value, (tuple, list)):
-        raise ValueError(
-            f"step returned a single value but output_key expects {keys}"
-        )
-    if len(keys) != len(value):
-        raise ValueError(
-            f"output_key count {len(keys)} does not match result count {len(value)}"
-        )
-    for key, item in zip(keys, value):
-        state[str(key)] = item
+    Args:
+        steps: Mapping from category name to ``{"method": ..., **params}``.
+
+    Returns:
+        Ordered list of ``AlgorithmStep`` instances following
+        ``CATEGORY_ORDER``; user-defined categories are appended in
+        insertion order.
+    """
+    ordered_categories = CATEGORY_ORDER + [
+        category for category in steps if category not in CATEGORY_ORDER
+    ]
+    ordered = []
+    for category in ordered_categories:
+        if category not in steps:
+            continue
+        params = steps[category].copy()
+        method = params.pop("method")
+        ordered.append(AlgorithmStep(category=category, method=method, params=params))
+
+    return ordered
 
 
 def execute_algorithm_steps(
     csi: np.ndarray,
-    steps: Sequence[AlgorithmStep | Mapping[str, Any] | Sequence[Any]],
+    steps: Sequence[AlgorithmStep | Mapping[str, Any]],
     *,
     dataset: str = "",
-    initial_state: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Execute configurable algorithm steps and return the full state dict.
+) -> np.ndarray:
+    """Execute algorithm steps in order, chaining each output to the next input.
 
     Args:
         csi: Input CSI array.
-        steps: Ordered sequence of steps. Each step may be an ``AlgorithmStep``,
-            a mapping, or a ``(category, method, params?)`` tuple.
+        steps: Ordered sequence of ``AlgorithmStep`` objects or mapping configs.
         dataset: Dataset name, passed to steps that request it.
-        initial_state: Optional initial state entries (e.g. file metadata).
 
     Returns:
-        State dictionary containing at least ``csi`` plus any named outputs
-        produced by the steps.
+        The output of the last step (or ``csi`` unchanged when ``steps`` is
+        empty).
     """
-    state: dict[str, Any] = dict(initial_state or {})
-    state.setdefault("csi", csi)
-
+    result = csi
     for raw_step in steps:
         step = AlgorithmStep.from_config(raw_step)
-        if not step.enabled:
-            continue
-
-        if step.input_key not in state:
-            raise KeyError(
-                f"step {step.name} missing input_key: {step.input_key}"
-            )
-
         func = get_algorithm(step.category, step.method)
-        result = func(
-            state[step.input_key],
-            dataset=dataset,
-            method=step.method,
-            **dict(step.params),
-        )
-        _assign_output(state, step.output_key, result)
+        result = func(result, dataset=dataset, method=step.method, **dict(step.params))
+    return result
 
-    return state
+
+def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
+                     dataset: Optional[str] = None) -> Any:
+    """
+    Execute a processing pipeline on CSI data.
+
+    Applies each processing step in order (denoise → outliers → calibrate → ...).
+
+    Args:
+        csi: Input CSI array of shape (T, F, A)
+        steps: Pipeline steps from apply_preset() or config file
+        dataset: Optional dataset name for dataset-aware steps and
+            amplitude-primary cleanup.
+
+    Returns:
+        Processed CSI array
+
+    Examples:
+        >>> from wsdp.algorithms import apply_preset, execute_pipeline
+        >>> steps = apply_preset('high_quality')
+        >>> processed = execute_pipeline(csi, steps)
+
+        >>> # Or with custom steps
+        >>> steps = {
+        ...     'denoise': {'method': 'butterworth', 'order': 5},
+        ...     'calibrate': {'method': 'stc'},
+        ... }
+        >>> processed = execute_pipeline(csi, steps)
+    """
+    result = execute_algorithm_steps(
+        csi, build_steps_from_config(steps), dataset=dataset or ""
+    )
+    return real_if_negligible_imaginary(result, dataset or "")

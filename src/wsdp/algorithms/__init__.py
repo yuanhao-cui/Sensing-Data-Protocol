@@ -63,12 +63,16 @@ from .registry import (
     apply_preset,
     register_preset,
     list_presets,
-    execute_pipeline,
     PRESETS,
 )
 
 # Modular pipeline imports
-from .pipeline import AlgorithmStep, execute_algorithm_steps
+from .pipeline import (
+    AlgorithmStep,
+    build_steps_from_config,
+    execute_algorithm_steps,
+    execute_pipeline,
+)
 from .adapter import FunctionAlgorithm
 
 
@@ -277,6 +281,7 @@ __all__ = [
     "PRESETS",
     # Modular pipeline
     "AlgorithmStep",
+    "build_steps_from_config",
     "execute_algorithm_steps",
     "FunctionAlgorithm",
 ]

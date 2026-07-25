@@ -1,6 +1,6 @@
 """Modular processor that runs configurable algorithm steps per CSI sample."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from typing import Any, List, Tuple
 
@@ -15,10 +15,13 @@ class ModularProcessor(Processor):
     """Processor that applies a configurable algorithm pipeline to each sample.
 
     Args:
-        steps: Ordered sequence of ``AlgorithmStep`` objects describing the
-            per-sample processing chain.
+        steps: Ordered sequence of ``AlgorithmStep`` objects (or mapping
+            configs) describing the per-sample processing chain.
         n_workers: Number of worker processes used to process samples in
-            parallel (default 16).
+            parallel (default 16). With ``n_workers=1`` samples are processed
+            serially in the current process — useful for debugging and for
+            custom algorithms that cannot be pickled (e.g. closures), since
+            process pools require picklable callables.
     """
 
     def __init__(
@@ -44,14 +47,18 @@ class ModularProcessor(Processor):
             steps=self.steps,
         )
 
+        if self.n_workers <= 1:
+            results = map(worker_func, data_list)
+        else:
+            with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
+                results = list(executor.map(worker_func, data_list))
+
         all_data, all_labels, all_groups = [], [], []
-        with ThreadPoolExecutor(max_workers=self.n_workers) as executor:
-            results = executor.map(worker_func, data_list)
-            for csi, label, group in results:
-                if csi is not None:
-                    all_data.append(csi)
-                    all_labels.append(label)
-                    all_groups.append(group)
+        for csi, label, group in results:
+            if csi is not None:
+                all_data.append(csi)
+                all_labels.append(label)
+                all_groups.append(group)
         return all_data, all_labels, all_groups
 
 
@@ -73,10 +80,5 @@ def _process_single_modular(
     if whole_csi.shape[0] < 2:
         return None, None, None
 
-    state = execute_algorithm_steps(
-        whole_csi,
-        steps,
-        dataset=dataset,
-    )
-    cleaned_csi = state.get("csi", whole_csi)
+    cleaned_csi = execute_algorithm_steps(whole_csi, steps, dataset=dataset)
     return cleaned_csi, label, group

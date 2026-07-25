@@ -33,13 +33,25 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 
-from wsdp.dataset_policy import real_if_negligible_imaginary
 from .adapter import FunctionAlgorithm
 
 
 # ============================================================================
 # Algorithm Registry
 # ============================================================================
+
+# Default execution order for built-in algorithm categories. User-defined
+# categories are appended in insertion order (see pipeline.build_steps_from_config).
+CATEGORY_ORDER = [
+    "denoise",
+    "outliers",
+    "calibrate",
+    "normalize",
+    "interpolate",
+    "extract_features",
+    "detect",
+]
+
 
 @dataclasses.dataclass(frozen=True)
 class _AlgorithmEntry:
@@ -437,56 +449,6 @@ def list_presets() -> Dict[str, list]:
         {'high_quality': ['denoise', 'calibrate', 'normalize'], ...}
     """
     return {name: list(steps.keys()) for name, steps in PRESETS.items()}
-
-
-# ============================================================================
-# Pipeline Execution
-# ============================================================================
-
-from .pipeline import AlgorithmStep, execute_algorithm_steps
-from ..config.pipeline_config import CATEGORY_ORDER, build_steps_from_config
-
-
-def execute_pipeline(csi, steps: Dict[str, Dict[str, Any]],
-                     dataset: Optional[str] = None) -> Any:
-    """
-    Execute a processing pipeline on CSI data.
-
-    Applies each processing step in order (denoise → outliers → calibrate → ...).
-
-    Args:
-        csi: Input CSI array of shape (T, F, A)
-        steps: Pipeline steps from apply_preset() or config file
-        dataset: Optional dataset name for dataset-aware steps and
-            amplitude-primary cleanup.
-
-    Returns:
-        Processed CSI array
-
-    Examples:
-        >>> from wsdp.algorithms import apply_preset, execute_pipeline
-        >>> steps = apply_preset('high_quality')
-        >>> processed = execute_pipeline(csi, steps)
-
-        >>> # Or with custom steps
-        >>> steps = {
-        ...     'denoise': {'method': 'butterworth', 'order': 5},
-        ...     'calibrate': {'method': 'stc'},
-        ... }
-        >>> processed = execute_pipeline(csi, steps)
-    """
-
-    algorithm_steps = build_steps_from_config(steps)
-    state = execute_algorithm_steps(
-        csi,
-        algorithm_steps,
-        dataset=dataset or "",
-    )
-
-    result = state.get('csi', csi)
-    result = real_if_negligible_imaginary(result, dataset or "")
-
-    return result
 
 
 # ============================================================================
