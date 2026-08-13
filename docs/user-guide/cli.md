@@ -17,6 +17,8 @@ Options:
   -e, --epochs INT        Number of epochs
   -b, --batch-size INT    Batch size
   -c, --config PATH       Config file path
+  --reader TEXT           Registered reader name used to load input files
+                          (default: same as DATASET)
 
 Examples:
   wsdp run ./data/elderAL ./output elderAL

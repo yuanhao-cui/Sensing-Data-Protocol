@@ -115,7 +115,39 @@ steps = apply_preset('high_quality')
 processed = execute_pipeline(csi, steps)
 ```
 
-Available presets: `high_quality`, `fast`, `robust`, `gesture_recognition`, `activity_detection`, `localization`.
+Available presets: `high_quality`, `fast`, `robust`, `gesture_recognition`, `activity_detection`, `localization`, plus per-dataset presets named after each dataset (`widar`, `gait`, `xrf55`, `elderAL`, `zte`).
+
+## Custom Readers & Modular Pipeline
+
+Register a reader for a new file format, then select it independently of the
+dataset's filename convention:
+
+```python
+from wsdp import pipeline
+from wsdp.readers import BaseReader, register_reader
+
+class MyReader(BaseReader):
+    def sniff(self, file_path): return file_path.endswith('.myfmt')
+    def read_file(self, file_path): ...  # parse the file into CSIData
+
+register_reader('my_format', MyReader)
+pipeline('./data/my_dataset', './output', 'xrf55', reader='my_format')
+```
+
+Compose preprocessing steps freely with `ModularProcessor`:
+
+```python
+from wsdp.algorithms import AlgorithmStep
+from wsdp.processors import ModularProcessor
+
+steps = [
+    AlgorithmStep(category='denoise', method='wavelet', params={'level': 2}),
+    AlgorithmStep(category='normalize', method='z-score'),  # calibration skipped
+]
+data, labels, groups = ModularProcessor(steps).process(csi_data_list, dataset='xrf55')
+```
+
+See `examples/scripts/custom_reader_algorithm.py` for a runnable end-to-end example.
 
 ## Preprocessing Cache
 

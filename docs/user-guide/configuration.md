@@ -34,6 +34,7 @@ All hyperparameters can be overridden via CLI:
 | Config File | `--config` | None |
 | Algorithm Preset | `--algorithm-preset` | None |
 | Algorithm Config | `--algorithm-config` | None |
+| Reader | `--reader` | Same as DATASET |
 | Num Workers | `--num-workers` | `4` |
 | Use Cache | `--use-cache` | `False` |
 
@@ -72,6 +73,8 @@ processed = execute_pipeline(csi, steps)
 | `gesture_recognition` | Butterworth denoise, STC calibration, z-score normalize, cubic interpolation | Gesture tasks |
 | `activity_detection` | Savgol denoise, polynomial calibration, z-score normalize | HAR tasks |
 | `localization` | Wavelet denoise, robust calibration, z-score normalize, cubic interpolation | Localization tasks |
+
+Per-dataset presets (`widar`, `gait`, `xrf55`, `elderAL`, `zte`) are also registered; they currently mirror the legacy default chain (linear calibration + wavelet denoise).
 
 ## Algorithm Selection via YAML
 

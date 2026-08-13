@@ -103,6 +103,11 @@ register_algorithm('denoise', 'my_method', my_denoise)
 result = denoise(csi, method='my_method')
 ```
 
+Optional registration flags: `pass_dataset=True` / `pass_method=True` inject the
+dataset name / registered method name into the call, and
+`unsupported_datasets=('zte', ...)` makes the step raise a clear error on
+datasets it cannot handle.
+
 ### Use Presets
 
 ```python
@@ -122,6 +127,8 @@ Available presets:
 | `gesture_recognition` | Gesture tasks: butterworth denoise + STC calibration + z-score normalization + cubic interpolation |
 | `activity_detection` | HAR tasks: savgol denoise + polynomial calibration + z-score normalization |
 | `localization` | Localization tasks: wavelet denoise + robust calibration + z-score normalization + cubic interpolation |
+
+Per-dataset presets (`widar`, `gait`, `xrf55`, `elderAL`, `zte`) are also available and currently mirror the legacy default chain (linear calibration + wavelet denoise).
 
 ### Load from Config File
 

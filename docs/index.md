@@ -175,13 +175,14 @@ This project is licensed under the MIT License.
 ## 📖 Citation
 
 ```bibtex
-@misc{zhang2026sdpunifiedprotocolbenchmarking,
-  title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wireless Sensing}, 
-  author={Di Zhang and Jiawei Huang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
+@ARTICLE{11652923,
+  author={Zhang, Di and Huang, Jiawei and Cui, Yuanhao and Cao, Xiaowen and Han, Tony Xiao and Jing, Xiaojun},
+  journal={IEEE Transactions on Mobile Computing},
+  title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wi-Fi Sensing},
   year={2026},
-  eprint={2601.08463},
-  archivePrefix={arXiv},
-  primaryClass={eess.SP},
-  url={https://arxiv.org/abs/2601.08463}
-}
+  volume={},
+  number={},
+  pages={1-14},
+  keywords={Wireless fidelity;Modeling;Frequency;Protocols;Training;Streams;Accuracy;Measurement;Tensors;Antennas;Benchmark;canonical representation;channel state information (CSI);integrated sensing and communications (ISAC);reproducibility;wireless sensing},
+  doi={10.1109/TMC.2026.3723025}}
 ```
