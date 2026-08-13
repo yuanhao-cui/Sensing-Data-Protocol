@@ -1,7 +1,6 @@
 """Tests for visualization module."""
 import numpy as np
 import pytest
-from unittest.mock import patch, MagicMock
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 
@@ -19,12 +18,12 @@ class TestVisualizationImport:
 
 
 class TestPlotCSIHeatmap:
-    def test_basic(self):
+    def test_basic(self, tmp_path):
         from wsdp.algorithms.visualization import plot_csi_heatmap
         data = np.random.randn(100, 30, 2) + 1j * np.random.randn(100, 30, 2)
         fig = plot_csi_heatmap(data, antenna_idx=0)
         assert fig is not None
-        fig.savefig("/tmp/test_plot.png")
+        fig.savefig(tmp_path / "test_plot.png")
         import matplotlib.pyplot as plt
         plt.close(fig)
 

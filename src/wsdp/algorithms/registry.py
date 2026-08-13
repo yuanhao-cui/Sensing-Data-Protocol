@@ -60,6 +60,8 @@ class _AlgorithmEntry:
     ref: str
     pass_dataset: bool = False
     pass_method: bool = False
+    # Datasets this algorithm must not run on; empty means no restriction.
+    unsupported_datasets: frozenset = frozenset()
 
 
 # Lazy-loaded function cache
@@ -172,6 +174,7 @@ def register_algorithm(
     func: Callable,
     pass_dataset: bool = False,
     pass_method: bool = False,
+    unsupported_datasets=(),
 ) -> None:
     """
     Register a custom algorithm.
@@ -187,6 +190,8 @@ def register_algorithm(
         pass_dataset: If True, the dataset name is injected into the call.
         pass_method: If True, the registered method name is injected into the
             call. Useful when one function dispatches across multiple methods.
+        unsupported_datasets: Dataset names this algorithm must not run on;
+            execution raises a clear error instead of failing deep inside.
 
     Raises:
         ValueError: If category is not a known category
@@ -208,6 +213,7 @@ def register_algorithm(
         method=name,
         pass_dataset=pass_dataset,
         pass_method=pass_method,
+        unsupported_datasets=unsupported_datasets,
     )
 
 
@@ -276,6 +282,7 @@ def get_algorithm(category: str, name: str) -> Callable:
                 method=name,
                 pass_dataset=entry.pass_dataset,
                 pass_method=entry.pass_method,
+                unsupported_datasets=entry.unsupported_datasets,
             )
         return _algorithm_cache[cache_key]
 
@@ -345,6 +352,42 @@ def is_registered(category: str, name: str) -> bool:
 
 
 # ============================================================================
+# Dataset Compatibility
+# ============================================================================
+
+def check_algorithm_compatibility(category: str, name: str, dataset: str = "") -> None:
+    """Raise ValueError if an algorithm is marked unsupported for a dataset.
+
+    Reads the ``unsupported_datasets`` marker carried by the resolved
+    algorithm. An empty ``dataset`` skips the check entirely.
+
+    Args:
+        category: Algorithm category
+        name: Algorithm name
+        dataset: Dataset name to check against
+
+    Raises:
+        ValueError: If the algorithm is marked unsupported for ``dataset``;
+            the message lists the category methods usable on this dataset.
+            Unknown categories/names raise as in ``get_algorithm``.
+    """
+    if not dataset:
+        return
+    func = get_algorithm(category, name)
+    if dataset not in func.unsupported_datasets:
+        return
+    usable = [
+        method
+        for method in list_algorithms(category)
+        if dataset not in get_algorithm(category, method).unsupported_datasets
+    ]
+    raise ValueError(
+        f"Algorithm '{category}:{name}' is marked unsupported for dataset "
+        f"'{dataset}'. Usable on this dataset: {usable}"
+    )
+
+
+# ============================================================================
 # Pipeline Presets
 # ============================================================================
 
@@ -380,6 +423,29 @@ PRESETS: Dict[str, Dict[str, Dict[str, Any]]] = {
         'calibrate': {'method': 'robust'},
         'normalize': {'method': 'z-score'},
         'interpolate': {'method': 'cubic', 'target_K': 64},
+    },
+    # Per-dataset presets, named after each dataset. Content is currently the
+    # conservative legacy default chain as a placeholder.
+    # TODO: maintainers vet per-dataset algorithm choices.
+    'widar': {
+        'calibrate': {'method': 'linear'},
+        'denoise': {'method': 'wavelet'},
+    },
+    'gait': {
+        'calibrate': {'method': 'linear'},
+        'denoise': {'method': 'wavelet'},
+    },
+    'xrf55': {
+        'calibrate': {'method': 'linear'},
+        'denoise': {'method': 'wavelet'},
+    },
+    'elderAL': {
+        'calibrate': {'method': 'linear'},
+        'denoise': {'method': 'wavelet'},
+    },
+    'zte': {
+        'calibrate': {'method': 'linear'},
+        'denoise': {'method': 'wavelet'},
     },
 }
 

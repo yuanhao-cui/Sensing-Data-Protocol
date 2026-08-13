@@ -2,6 +2,40 @@
 
 All notable changes to WSDP are documented here.
 
+## [Unreleased]
+
+### ✨ New Features
+
+- **Dataset compatibility marker for algorithms**: `register_algorithm()` and
+  built-in registry entries now accept `unsupported_datasets`. The unified
+  engine (`execute_algorithm_steps`) validates every step through the new
+  `check_algorithm_compatibility()` before execution and raises a clear
+  `ValueError` listing the alternatives usable on that dataset.
+- **Per-dataset pipeline presets**: `widar`, `gait`, `xrf55`, `elderAL`, and
+  `zte` presets, selectable via `pipeline(..., algorithm_preset='xrf55')` or
+  CLI `--algorithm-preset xrf55`. Content is currently the conservative legacy
+  default chain as a placeholder, pending maintainer vetting.
+
+### 🔧 Bug Fixes
+
+- **Training always writes a checkpoint**: `train_model()` initializes
+  `best_val_acc` below the achievable range so the first epoch saves even when
+  validation accuracy stays at 0%. Previously such runs crashed afterwards in
+  `pipeline()` with `FileNotFoundError: no model in file path`.
+- **Python 3.9 compatibility**: add `from __future__ import annotations` to
+  `models/registry.py`, `readers/base.py`, and `readers/__init__.py` so their
+  PEP 604 union annotations no longer raise `TypeError` at import time.
+- **Cross-platform visualization test**: `test_visualization.py` saves figures
+  to pytest's `tmp_path` instead of the POSIX-only `/tmp`.
+- **XRF55 repetition split works on trial subsets**: `_load_and_preprocess`
+  no longer re-indexes xrf55 groups, which are the raw filename trial ids
+  (1-20) that `_create_xrf55_repetition_split` keys on, and the split falls
+  back to a repetition-disjoint `GroupShuffleSplit` (with a warning) when a
+  data folder lacks the fixed protocol ranges. Previously such subsets
+  crashed with `ValueError: Unexpected XRF55 repetition ids` or
+  `RuntimeError: ... empty split`. Clear stale `.wsdp_cache/` entries for
+  xrf55 after upgrading.
+
 ## [0.5.1] — 2026-07-07
 
 ### 🔧 Bug Fixes

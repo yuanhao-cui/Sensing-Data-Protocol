@@ -41,7 +41,9 @@ def _load_and_preprocess(
     """Load CSI data, run processing pipeline, and return arrays ready for splitting.
 
     Returns:
-        (processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels)
+        (processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels).
+        For ``xrf55`` the groups are the raw filename trial ids (1-20), kept
+        unmodified because ``_create_xrf55_repetition_split`` keys on them.
     """
     reader_name = reader or dataset
     csi_data_list = readers.load_data(input_path, reader_name)
@@ -63,9 +65,14 @@ def _load_and_preprocess(
     label_map = {label: i for i, label in enumerate(unique_labels)}
     zero_indexed_labels = [label_map[label] for label in labels]
 
-    unique_groups = sorted(list(set(groups)))
-    group_map = {group: i for i, group in enumerate(unique_groups)}
-    zero_indexed_groups = [group_map[group] for group in groups]
+    if dataset == 'xrf55':
+        # xrf55 groups are filename trial ids (1-20); re-indexing them would
+        # break the repetition split whenever a subset of trials is present.
+        zero_indexed_groups = list(groups)
+    else:
+        unique_groups = sorted(list(set(groups)))
+        group_map = {group: i for i, group in enumerate(unique_groups)}
+        zero_indexed_groups = [group_map[group] for group in groups]
 
     logger.info(f"all unique labels idx: {list(set(zero_indexed_labels))}")
     logger.info(f"all unique groups idx: {list(set(zero_indexed_groups))}")
@@ -115,9 +122,19 @@ def _create_data_split(
         (train_data, val_data, test_data, train_labels, val_labels, test_labels)
     """
     if dataset == "xrf55":
-        return _create_xrf55_repetition_split(
-            processed_data, labels, groups, pipeline_steps=pipeline_steps
-        )
+        try:
+            return _create_xrf55_repetition_split(
+                processed_data, labels, groups, pipeline_steps=pipeline_steps
+            )
+        except RuntimeError:
+            # Trial subsets may lack the fixed protocol ranges (13-16 val,
+            # 17-20 test). Fall back to a repetition-disjoint group split,
+            # which preserves the protocol's cross-repetition intent.
+            logger.warning(
+                "XRF55 trial subset misses a protocol range; falling back to "
+                "repetition-disjoint GroupShuffleSplit. Train-only statistics "
+                "for configured normalization are skipped in this mode."
+            )
 
     if use_simple_split:
         train_data, temp_data, train_labels, temp_labels = train_test_split(

@@ -26,6 +26,8 @@ class FunctionAlgorithm:
             ``method`` into the call kwargs. This is useful for shared
             implementations such as ``normalize_amplitude`` that dispatch
             internally on the method name.
+        unsupported_datasets: Dataset names this algorithm must not run on.
+            Consulted by ``check_algorithm_compatibility`` before execution.
     """
 
     def __init__(
@@ -34,11 +36,13 @@ class FunctionAlgorithm:
         method: str = "",
         pass_dataset: bool = False,
         pass_method: bool = False,
+        unsupported_datasets=(),
     ):
         self.func = func
         self.method = method
         self.pass_dataset = pass_dataset
         self.pass_method = pass_method
+        self.unsupported_datasets = frozenset(unsupported_datasets)
 
     def __call__(
         self,

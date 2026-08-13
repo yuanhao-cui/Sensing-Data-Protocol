@@ -1,5 +1,7 @@
 """Pluggable model registry for WSDP."""
 
+from __future__ import annotations
+
 from typing import Dict, Type
 import torch.nn as nn
 

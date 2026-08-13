@@ -36,7 +36,9 @@ def train_model(model, criterion, optimizer, scheduler, train_loader, val_loader
         'epoch': [], 'lr': []
     }
 
-    best_val_acc = 0.0
+    # Start below the achievable accuracy range so the first epoch always
+    # writes a checkpoint, even when validation accuracy stays at 0%.
+    best_val_acc = -1.0
     start_epoch = 0
 
     # Resume from checkpoint if specified

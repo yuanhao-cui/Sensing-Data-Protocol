@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from wsdp.dataset_policy import real_if_negligible_imaginary
-from .registry import CATEGORY_ORDER, get_algorithm
+from .registry import CATEGORY_ORDER, check_algorithm_compatibility, get_algorithm
 
 
 @dataclass(frozen=True)
@@ -110,6 +110,7 @@ def execute_algorithm_steps(
     result = csi
     for raw_step in steps:
         step = AlgorithmStep.from_config(raw_step)
+        check_algorithm_compatibility(step.category, step.method, dataset)
         func = get_algorithm(step.category, step.method)
         result = func(result, dataset=dataset, method=step.method, **dict(step.params))
     return result
