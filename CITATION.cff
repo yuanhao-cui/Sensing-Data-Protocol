@@ -10,8 +10,8 @@ authors:
   - name: "WSDP Team"
 repository-code: "https://github.com/sdp-team/wsdp"
 license: MIT
-version: 0.5.1
-date-released: 2026-07-07
+version: 0.5.2
+date-released: 2026-08-13
 keywords:
   - Wi-Fi sensing
   - CSI data
