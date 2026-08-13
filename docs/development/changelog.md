@@ -2,6 +2,27 @@
 
 See [CHANGELOG.md](https://github.com/yuanhao-cui/SDP-Sensing-Data-Protocol-for-Scalable-Wireless-Sensing/blob/main/CHANGELOG.md) on GitHub for full version history.
 
+## v0.5.2 (2026-08-13)
+
+### New Features
+- **Modular algorithm pipeline**: `AlgorithmStep` + `execute_algorithm_steps()` compose or skip steps freely (`examples/configs/modular_pipeline.yaml`).
+- **Pluggable readers**: `register_reader()` / `create_reader()`, public `Reader` / `Processor` ABCs in `wsdp.interfaces`, and `pipeline(reader=...)` / CLI `--reader` (`examples/scripts/custom_reader_algorithm.py`).
+- **ModularProcessor**: parallel filename-metadata parsing + algorithm steps; `BaseProcessor` delegates to it.
+- **Algorithm dataset compatibility marker**: `unsupported_datasets` validated up front via `check_algorithm_compatibility()`.
+- **Per-dataset presets**: `widar` / `gait` / `xrf55` / `elderAL` / `zte` (legacy default chain placeholders, pending vetting).
+
+### Bug Fixes
+- Training always writes a checkpoint, even when validation accuracy stays at 0%.
+- Python 3.9: `from __future__ import annotations` for PEP 604 annotations in the model/reader registries.
+- XRF55 repetition split works on trial subsets (groups no longer re-indexed; repetition-disjoint group-split fallback). Clear stale xrf55 `.wsdp_cache/` entries after upgrading.
+- Visualization test saves to pytest `tmp_path` (Windows-compatible).
+
+### Documentation
+- README split into an English homepage plus `docs/README_zh.md`; citation updated to the IEEE TMC version; guides synced with the modular pipeline and custom-reader APIs.
+
+### Engineering
+- Ruff ruleset pinned in `pyproject.toml` (`select = ["E4", "E7", "E9", "F"]`) after ruff 0.16 broadened its default selection and broke the CI lint job.
+
 ## v0.5.1 (2026-07-07)
 
 ### Bug Fixes

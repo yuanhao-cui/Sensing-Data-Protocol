@@ -2,10 +2,27 @@
 
 All notable changes to WSDP are documented here.
 
-## [Unreleased]
+## [0.5.2] — 2026-08-13
 
 ### ✨ New Features
 
+- **Modular algorithm pipeline**: `AlgorithmStep`, `build_steps_from_config()`,
+  `execute_algorithm_steps()`, and the `FunctionAlgorithm` adapter form a
+  one-way `pipeline → registry` design. Steps chain output → next input and
+  can be composed or skipped freely (see
+  `examples/configs/modular_pipeline.yaml`).
+- **Pluggable readers**: `register_reader()` / `unregister_reader()` /
+  `create_reader()` in `wsdp.readers`, public `Reader` / `Processor` ABCs in
+  `wsdp.interfaces`, and a new `reader=` argument on `pipeline()` (CLI
+  `--reader`) that decouples the file-format reader from the dataset's
+  filename convention. End-to-end example:
+  `examples/scripts/custom_reader_algorithm.py`.
+- **ModularProcessor**: runs filename metadata parsing + frame stacking +
+  `execute_algorithm_steps()` per sample in parallel. `BaseProcessor` now
+  delegates to it, and filename metadata parsing lives in
+  `wsdp/processors/metadata.py`.
+- **Model registry**: `unregister_model()` added; `create_model()` moved into
+  `wsdp.models.registry`.
 - **Dataset compatibility marker for algorithms**: `register_algorithm()` and
   built-in registry entries now accept `unsupported_datasets`. The unified
   engine (`execute_algorithm_steps`) validates every step through the new
@@ -35,6 +52,20 @@ All notable changes to WSDP are documented here.
   crashed with `ValueError: Unexpected XRF55 repetition ids` or
   `RuntimeError: ... empty split`. Clear stale `.wsdp_cache/` entries for
   xrf55 after upgrading.
+
+### 📖 Documentation
+
+- Split `README.md` into an English homepage plus `docs/README_zh.md` (中文),
+  rewrote "Use Your Own Dataset" around `register_reader` + `reader=`, and
+  documented the modular pipeline and per-dataset presets across the user
+  guide and API pages.
+- Updated the paper citation to the IEEE TMC version (README, docs).
+
+### 🛠 Engineering
+
+- **Ruff ruleset pinned**: `[tool.ruff.lint] select = ["E4", "E7", "E9", "F"]`
+  in `pyproject.toml` — ruff 0.16 broadened its default rule selection and
+  broke the CI lint job on pre-existing style findings.
 
 ## [0.5.1] — 2026-07-07
 
