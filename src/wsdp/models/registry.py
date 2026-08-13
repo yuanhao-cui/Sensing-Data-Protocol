@@ -1,13 +1,15 @@
 """Pluggable model registry for WSDP."""
 
-from typing import Dict, Type, Optional
+from __future__ import annotations
+
+from typing import Dict, Type
 import torch.nn as nn
 
 # Global registry: {lowercase_name: (category, model_class)}
 MODEL_REGISTRY: Dict[str, tuple] = {}
 
 
-def register_model(category: str, name: str, model_class: Type[nn.Module]):
+def register_model(category: str, name: str, model_class: Type[nn.Module]) -> None:
     """Register a model class in the global registry.
 
     Args:
@@ -19,6 +21,12 @@ def register_model(category: str, name: str, model_class: Type[nn.Module]):
     if key in MODEL_REGISTRY:
         raise ValueError(f"Model '{name}' already registered.")
     MODEL_REGISTRY[key] = (category.lower(), model_class)
+
+
+def unregister_model(name: str) -> bool:
+    """Remove a model registration, returning whether it existed."""
+    key = name.lower()
+    return MODEL_REGISTRY.pop(key, None) is not None
 
 
 def get_model(name: str, **kwargs) -> nn.Module:
@@ -42,7 +50,22 @@ def get_model(name: str, **kwargs) -> nn.Module:
     return model_class(**kwargs)
 
 
-def list_models(category: Optional[str] = None) -> Dict[str, str]:
+def create_model(name: str, num_classes: int, input_shape: tuple, **kwargs) -> nn.Module:
+    """Create a model by name with unified interface.
+
+    Args:
+        name: Model name from registry (case-insensitive).
+        num_classes: Number of output classes.
+        input_shape: (T, F, A) tuple — time steps, frequency bins, antennas.
+        **kwargs: Extra model-specific hyperparameters.
+
+    Returns:
+        nn.Module instance.
+    """
+    return get_model(name, num_classes=num_classes, input_shape=input_shape, **kwargs)
+
+
+def list_models(category: str | None = None) -> Dict[str, str]:
     """List all registered models, optionally filtered by category.
 
     Args:

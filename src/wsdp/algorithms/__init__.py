@@ -58,35 +58,28 @@ from .registry import (
     list_algorithms,
     is_registered,
     algorithm_info,
+    check_algorithm_compatibility,
     load_config,
     save_config,
     apply_preset,
     register_preset,
     list_presets,
-    execute_pipeline,
     PRESETS,
 )
+
+# Modular pipeline imports
+from .pipeline import (
+    AlgorithmStep,
+    build_steps_from_config,
+    execute_algorithm_steps,
+    execute_pipeline,
+)
+from .adapter import FunctionAlgorithm
 
 
 # ============================================================================
 # Unified API
 # ============================================================================
-
-import inspect
-
-def _filter_kwargs(func, kwargs):
-    """Filter kwargs to only include those accepted by func."""
-    try:
-        sig = inspect.signature(func)
-        valid_params = set(sig.parameters.keys())
-        # If **kwargs is present, pass all
-        for p in sig.parameters.values():
-            if p.kind == inspect.Parameter.VAR_KEYWORD:
-                return kwargs
-        return {k: v for k, v in kwargs.items() if k in valid_params}
-    except (ValueError, TypeError):
-        return kwargs
-
 
 def denoise(csi, method='wavelet', **kwargs):
     """
@@ -114,8 +107,7 @@ def denoise(csi, method='wavelet', **kwargs):
         >>> denoise(csi, method='my_method', my_param=42)
     """
     func = get_algorithm('denoise', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, **filtered)
+    return func(csi, **kwargs)
 
 
 def calibrate(csi, method='linear', **kwargs):
@@ -142,8 +134,7 @@ def calibrate(csi, method='linear', **kwargs):
         >>> calibrate(csi, method='robust')
     """
     func = get_algorithm('calibrate', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, **filtered)
+    return func(csi, **kwargs)
 
 
 def normalize(csi, method='z-score', **kwargs):
@@ -166,8 +157,7 @@ def normalize(csi, method='z-score', **kwargs):
         >>> normalize(csi, method='min-max')
     """
     func = get_algorithm('normalize', method)
-    filtered = _filter_kwargs(func, kwargs)
-    return func(csi, method=method, **filtered)
+    return func(csi, method=method, **kwargs)
 
 
 def interpolate(csi, target_K=30, method='cubic', **kwargs):
@@ -191,11 +181,7 @@ def interpolate(csi, target_K=30, method='cubic', **kwargs):
         >>> interpolate(csi, target_K=15, method='linear')
     """
     func = get_algorithm('interpolate', method)
-    filtered = _filter_kwargs(func, kwargs)
-    sig = inspect.signature(func)
-    if 'method' in sig.parameters:
-        return func(csi, target_K=target_K, method=method, **filtered)
-    return func(csi, target_K=target_K, **filtered)
+    return func(csi, target_K=target_K, method=method, **kwargs)
 
 
 def extract_features(csi, features=None, **kwargs):
@@ -287,6 +273,7 @@ __all__ = [
     "list_algorithms",
     "is_registered",
     "algorithm_info",
+    "check_algorithm_compatibility",
     "load_config",
     "save_config",
     "apply_preset",
@@ -294,4 +281,9 @@ __all__ = [
     "list_presets",
     "execute_pipeline",
     "PRESETS",
+    # Modular pipeline
+    "AlgorithmStep",
+    "build_steps_from_config",
+    "execute_algorithm_steps",
+    "FunctionAlgorithm",
 ]

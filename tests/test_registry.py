@@ -17,12 +17,15 @@ from wsdp.algorithms import (
     list_algorithms,
     is_registered,
     algorithm_info,
+    check_algorithm_compatibility,
     load_config,
     save_config,
     apply_preset,
     register_preset,
     list_presets,
     execute_pipeline,
+    build_steps_from_config,
+    execute_algorithm_steps,
     PRESETS,
     # Unified API
     denoise,
@@ -399,3 +402,83 @@ class TestRegistryIntegration:
         for method in ['linear', 'polynomial', 'stc', 'robust']:
             result = calibrate(csi_complex, method=method)
             assert result.shape == csi_complex.shape, f"Failed for method={method}"
+
+
+# ============================================================================
+# Dataset Compatibility Tests
+# ============================================================================
+class TestDatasetCompatibility:
+    def test_builtin_algorithms_have_no_restrictions(self):
+        """Built-ins ship without dataset restrictions for now (placeholder)."""
+        for category, methods in list_algorithms().items():
+            for method in methods:
+                check_algorithm_compatibility(category, method, 'xrf55')
+
+    def test_unsupported_dataset_raises(self):
+        """An algorithm marked unsupported raises only for that dataset."""
+        def my_denoise(csi, **kwargs):
+            return csi
+
+        register_algorithm('denoise', 'no_xrf55', my_denoise,
+                           unsupported_datasets={'xrf55'})
+        try:
+            check_algorithm_compatibility('denoise', 'no_xrf55', 'widar')
+            with pytest.raises(ValueError, match="unsupported for dataset 'xrf55'"):
+                check_algorithm_compatibility('denoise', 'no_xrf55', 'xrf55')
+        finally:
+            unregister_algorithm('denoise', 'no_xrf55')
+
+    def test_error_lists_usable_alternatives(self):
+        def my_denoise(csi, **kwargs):
+            return csi
+
+        register_algorithm('denoise', 'no_xrf55', my_denoise,
+                           unsupported_datasets={'xrf55'})
+        try:
+            with pytest.raises(ValueError, match="wavelet"):
+                check_algorithm_compatibility('denoise', 'no_xrf55', 'xrf55')
+        finally:
+            unregister_algorithm('denoise', 'no_xrf55')
+
+    def test_empty_dataset_skips_check(self):
+        check_algorithm_compatibility('denoise', 'wavelet', '')
+
+    def test_execute_steps_enforces_compatibility(self, csi_complex):
+        """The unified engine rejects an unsupported step before running it."""
+        def my_denoise(csi, **kwargs):
+            return csi
+
+        register_algorithm('denoise', 'no_xrf55', my_denoise,
+                           unsupported_datasets={'xrf55'})
+        try:
+            steps = build_steps_from_config({'denoise': {'method': 'no_xrf55'}})
+            out = execute_algorithm_steps(csi_complex, steps, dataset='widar')
+            assert out.shape == csi_complex.shape
+            with pytest.raises(ValueError, match="unsupported for dataset 'xrf55'"):
+                execute_algorithm_steps(csi_complex, steps, dataset='xrf55')
+        finally:
+            unregister_algorithm('denoise', 'no_xrf55')
+
+
+# ============================================================================
+# Dataset Preset Tests
+# ============================================================================
+class TestDatasetPresets:
+    DATASETS = ['widar', 'gait', 'xrf55', 'elderAL', 'zte']
+
+    def test_dataset_presets_exist(self):
+        for name in self.DATASETS:
+            assert name in PRESETS
+            assert name in list_presets()
+
+    def test_dataset_presets_are_valid_configs(self):
+        for name in self.DATASETS:
+            steps = apply_preset(name)
+            for category, params in steps.items():
+                assert 'method' in params
+
+    def test_dataset_preset_runs_through_engine(self, csi_complex):
+        """Each dataset preset executes end-to-end on synthetic CSI."""
+        for name in self.DATASETS:
+            result = execute_pipeline(csi_complex, apply_preset(name), dataset=name)
+            assert result.shape == csi_complex.shape

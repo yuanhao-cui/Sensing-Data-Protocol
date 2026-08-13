@@ -8,12 +8,12 @@ WSDP algorithms are organized into six categories:
 
 ```
 wsdp.algorithms
-├── denoise()        # Remove noise from CSI signals
-├── calibrate()      # Correct phase errors
-├── normalize()      # Normalize amplitude
-├── interpolate()    # Resample frequency grid
+├── denoise()          # Remove noise from CSI signals
+├── calibrate()        # Correct phase errors
+├── normalize()        # Normalize amplitude
+├── interpolate()      # Resample frequency grid
 ├── extract_features() # Extract signal features
-└── detect()         # Detect activity / change points
+└── detect_activity()  # Detect activity (see also change_point_detection())
 ```
 
 ## Choosing the Right Algorithm
@@ -192,7 +192,10 @@ change_points = change_point_detection(csi, method='mean_shift_ratio')
 
 ## Algorithm Performance Tips
 
-1. **Pipeline order matters**: Always denoise before calibrating
+1. **Fixed execution order**: Custom configs always run in category order
+   (`denoise → outliers → calibrate → normalize → interpolate → extract_features → detect`),
+   no matter how you order them in the YAML/dict. (The built-in default chain is the
+   one exception: it calibrates first, then denoises.)
 2. **Normalization last**: Normalize after all other processing
 3. **Match calibration to noise**: STC for CFO-dominant, robust for multipath
 4. **Feature extraction**: Do after denoising and calibration for best results

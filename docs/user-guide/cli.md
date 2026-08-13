@@ -12,15 +12,31 @@ Run the full training pipeline.
 wsdp run INPUT_PATH OUTPUT_FOLDER DATASET [OPTIONS]
 
 Options:
-  -m, --model-path PATH    Path to custom model
-  --lr FLOAT              Learning rate
-  -e, --epochs INT        Number of epochs
-  -b, --batch-size INT    Batch size
-  -c, --config PATH       Config file path
+  -m, --model-path PATH      Path to a custom model .py file
+                             (the file must expose `model = YourModelClass`)
+  --model TEXT               Registered model name (default: CSIModel),
+                             e.g. THAT, WiFlexFormer, ResNet1D
+  --model-kwargs JSON        Extra model constructor arguments,
+                             e.g. '{"dropout": 0.3}'
+  --algorithm-config PATH    YAML/JSON algorithm pipeline config
+  --algorithm-preset TEXT    Algorithm preset name,
+                             e.g. high_quality, fast, robust
+  --reader TEXT              Registered reader name used to load input files
+                             (default: same as DATASET)
+  --lr, --learning-rate FLOAT  Learning rate
+  -e, --epochs INT           Number of epochs
+  -b, --batch-size INT       Batch size
+  -c, --config PATH          YAML hyperparameter override
+                             (top-level key = dataset name;
+                             NOT an algorithm pipeline config)
 
 Examples:
   wsdp run ./data/elderAL ./output elderAL
   wsdp run ./data/widar ./output widar --lr 0.001 --epochs 50
+  wsdp run ./data/widar ./output widar --model THAT
+  wsdp run ./data/widar ./output widar -m custom_model.py
+  wsdp run ./data/widar ./output widar --algorithm-config my_algorithms.yaml
+  wsdp run ./data/widar ./output widar --algorithm-preset high_quality
 ```
 
 ### `wsdp download`

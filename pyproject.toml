@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsdp"
-version = "0.5.1"
+version = "0.5.2"
 description = "Wi-Fi Sensing Data Processing - A Python library for downloading, processing, analyzing and training on Wi-Fi CSI data"
 readme = "README.md"
 license = {text = "MIT"}
@@ -59,3 +59,8 @@ wsdp = ["configs/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Pin the lint ruleset explicitly: ruff 0.16+ broadened its default selection
+# beyond E4/E7/E9/F, which broke CI when it installs the latest release.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

@@ -27,7 +27,8 @@ wsdp run ./data/elderAL ./output elderAL --lr 0.001 --epochs 50
 
 ```bash
 ls ./output/
-# best_model.pth, confusion_matrix.png, output.log
+# best_checkpoint_<seed>.pth, training_history_<seed>.csv, cm_rs_<seed>.png
+# (one set of files per random seed)
 ```
 
 ### 4. Try an Algorithm Preset

@@ -13,15 +13,12 @@ A Python library for downloading, processing, analyzing and training on Wi-Fi CS
 
 **Published and maintained by [SDP8.org](https://sdp8.org)** - the official platform for reproducible wireless sensing research.
 
-## 🆕 What's New in v0.5.1
+## 🆕 What's New in v0.5.2
 
-- **7 critical scientific bug fixes** -- corrected phase calibration, wavelet boundary handling, Doppler normalization, and more
-- **7 new SOTA models** -- THAT, CSITime, PA_CSI, WiFlexFormer, AttentionGRU, EI, FewSense (19 total)
-- **6 new preprocessing algorithms** -- conjugate_multiply, agc_compensate, pca_fusion, bandpass, hampel, decimate (26+ total)
-- **Benchmark leaderboard** -- standardized model comparison across datasets
-- **CI/CD pipeline** -- automated testing, linting, and release workflow
-- **Experiment tracking & caching** -- reproducible runs with result caching
-- **GroupKFold cross-validation** -- user-aware evaluation to prevent data leakage
+- **Modular algorithm pipeline** -- freely compose preprocessing steps with `AlgorithmStep` and `execute_algorithm_steps()`
+- **Pluggable readers** -- bring your own file-format reader via `register_reader()` and `pipeline(..., reader=)` (CLI `--reader`)
+- **Per-dataset pipeline presets** -- `widar`, `gait`, `xrf55`, `elderAL`, `zte` via `--algorithm-preset`
+- **Compatibility & stability fixes** -- clearer errors when an algorithm doesn't support a dataset, checkpoint always saved, Python 3.9 fix, XRF55 subset split fix
 
 ## 🚀 Features
 
@@ -175,13 +172,14 @@ This project is licensed under the MIT License.
 ## 📖 Citation
 
 ```bibtex
-@misc{zhang2026sdpunifiedprotocolbenchmarking,
-  title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wireless Sensing}, 
-  author={Di Zhang and Jiawei Huang and Yuanhao Cui and Xiaowen Cao and Tony Xiao Han and Xiaojun Jing and Christos Masouros},
+@ARTICLE{11652923,
+  author={Zhang, Di and Huang, Jiawei and Cui, Yuanhao and Cao, Xiaowen and Han, Tony Xiao and Jing, Xiaojun},
+  journal={IEEE Transactions on Mobile Computing},
+  title={SDP: A Unified Protocol and Benchmarking Framework for Reproducible Wi-Fi Sensing},
   year={2026},
-  eprint={2601.08463},
-  archivePrefix={arXiv},
-  primaryClass={eess.SP},
-  url={https://arxiv.org/abs/2601.08463}
-}
+  volume={},
+  number={},
+  pages={1-14},
+  keywords={Wireless fidelity;Modeling;Frequency;Protocols;Training;Streams;Accuracy;Measurement;Tensors;Antennas;Benchmark;canonical representation;channel state information (CSI);integrated sensing and communications (ISAC);reproducibility;wireless sensing},
+  doi={10.1109/TMC.2026.3723025}}
 ```

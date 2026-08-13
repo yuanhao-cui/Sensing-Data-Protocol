@@ -80,26 +80,29 @@ pipeline(
 
 ```python
 from wsdp.algorithms import denoise, calibrate, normalize, interpolate
-from wsdp.algorithms import extract_features, detect, remove_outliers
+from wsdp.algorithms import extract_features, remove_outliers
+from wsdp.algorithms import detect_activity, change_point_detection
 
 # Denoising (5 methods)
 denoised = denoise(csi, method='butterworth', order=5)
-denoised = denoise(csi, method='hampel', window=5, threshold=3.0)
+denoised = denoise(csi, method='hampel', window_size=5, n_sigma=3.0)
 denoised = denoise(csi, method='bandpass', low_freq=0.5, high_freq=50.0, fs=1000.0)
 
 # Calibration
 calibrated = calibrate(denoised, method='stc')
 
-# Normalization (including AGC)
-normalized = normalize(calibrated, method='agc', target_power=1.0)
+# Normalization (z-score, min-max, or AGC compensation)
+normalized = normalize(calibrated, method='z-score')
+# AGC compensation requires the per-frame AGC gain values (shape (T,), from BfeeFrame.agc):
+normalized = normalize(calibrated, method='agc', agc_values=agc_values)
 
 # Feature extraction (including new algorithms)
 features = extract_features(normalized, features=['conjugate_multiply'])
 fused = extract_features(normalized, features=['pca_fusion'])
 
-# Outlier removal
+# Outlier removal (both methods use `factor` as the threshold multiplier)
 cleaned = remove_outliers(csi, method='iqr', factor=1.5)
-cleaned = remove_outliers(csi, method='z-score', threshold=3.0)
+cleaned = remove_outliers(csi, method='z-score', factor=3.0)
 
 # Interpolation (including decimation)
 resampled = interpolate(csi, method='decimate', target_K=15)
@@ -115,7 +118,63 @@ steps = apply_preset('high_quality')
 processed = execute_pipeline(csi, steps)
 ```
 
-Available presets: `high_quality`, `fast`, `robust`, `gesture_recognition`, `activity_detection`, `localization`.
+Available presets: `high_quality`, `fast`, `robust`, `gesture_recognition`, `activity_detection`, `localization`, plus per-dataset presets named after each dataset (`widar`, `gait`, `xrf55`, `elderAL`, `zte`).
+
+### Custom Algorithm Pipeline in `pipeline()`
+
+Pass a flat dict of steps (method + parameters inline) to `pipeline()`:
+
+```python
+from wsdp import pipeline
+
+pipeline(
+    input_path='./data/elderAL',
+    output_folder='./output',
+    dataset='elderAL',
+    pipeline_steps={
+        'denoise': {'method': 'wavelet', 'level': 2},
+        'calibrate': {'method': 'linear'},
+        'normalize': {'method': 'z-score'},
+    },
+)
+```
+
+Steps execute in a fixed category order (`denoise → calibrate → normalize → ...`),
+regardless of dict order. You can also point to a YAML/JSON file with
+`algorithm_config_file=` or use `algorithm_preset='high_quality'` — see
+[Configuration](configuration.md).
+
+## Custom Readers & Modular Pipeline
+
+Register a reader for a new file format, then select it independently of the
+dataset's filename convention:
+
+```python
+from wsdp import pipeline
+from wsdp.readers import BaseReader, register_reader
+
+class MyReader(BaseReader):
+    def sniff(self, file_path): return file_path.endswith('.myfmt')
+    def read_file(self, file_path): ...  # parse the file into CSIData
+
+register_reader('my_format', MyReader)
+pipeline('./data/my_dataset', './output', 'xrf55', reader='my_format')
+```
+
+Compose preprocessing steps freely with `ModularProcessor`:
+
+```python
+from wsdp.algorithms import AlgorithmStep
+from wsdp.processors import ModularProcessor
+
+steps = [
+    AlgorithmStep(category='denoise', method='wavelet', params={'level': 2}),
+    AlgorithmStep(category='normalize', method='z-score'),  # calibration skipped
+]
+data, labels, groups = ModularProcessor(steps).process(csi_data_list, dataset='xrf55')
+```
+
+See `examples/scripts/custom_reader_algorithm.py` for a runnable end-to-end example.
 
 ## Preprocessing Cache
 
@@ -159,25 +218,26 @@ pipeline(
 
 ## Experiment Tracker
 
-Track and compare experiments across multiple runs:
+Track training runs with a local CSV backend (or W&B / MLflow if installed):
 
 ```python
-from wsdp.tracking import ExperimentTracker
+from wsdp.utils import ExperimentTracker
 
-tracker = ExperimentTracker('./experiments')
+tracker = ExperimentTracker(backend='local', project_name='wsdp',
+                            run_name='THAT_elderAL_v1', output_dir='./experiments')
 
-# Log experiment parameters and results
-tracker.log_experiment(
-    name='THAT_elderAL_v1',
-    params={'model': 'THAT', 'lr': 1e-3, 'epochs': 50},
-    metrics={'accuracy': 0.95, 'f1': 0.94},
-)
+# Log hyperparameters and per-epoch metrics
+tracker.log_params({'model': 'THAT', 'lr': 1e-3, 'epochs': 50})
+tracker.log_metrics({'loss': 0.12, 'accuracy': 0.95}, step=50)
 
-# Compare experiments
-tracker.compare(['THAT_elderAL_v1', 'CSITime_elderAL_v1'])
+# Optionally attach artifacts (checkpoints, plots)
+tracker.log_artifact('./output/best_checkpoint_42.pth')
 
-# Get best experiment by metric
-best = tracker.get_best(metric='accuracy')
+# Finalise the run (flushes params to CSV for the local backend)
+tracker.finish()
 ```
+
+Backends: `'local'` (CSV, no dependencies), `'wandb'` and `'mlflow'`
+(require the corresponding packages; fall back to local CSV if missing).
 
 See [API Reference](../api/core.md) for full documentation.

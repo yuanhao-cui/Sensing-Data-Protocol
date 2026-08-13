@@ -1,16 +1,20 @@
-from abc import ABC, abstractmethod
-from typing import Dict, Any
+from __future__ import annotations
+
+from abc import abstractmethod
+from typing import Any, Dict, List
+
+from wsdp.interfaces import Reader
 from wsdp.structure import CSIData
 
 
-class BaseReader(ABC):
+class BaseReader(Reader):
     """
     Base class for Readers
     One reader handles specified type of file
     """
 
     @abstractmethod
-    def read_file(self, file_path: str) -> CSIData:
+    def read_file(self, file_path: str) -> CSIData | List[CSIData]:
         pass
 
     def sniff(self, file_path: str) -> bool:

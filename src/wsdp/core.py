@@ -36,13 +36,17 @@ def _load_and_preprocess(
     dataset: str,
     pad_len: int,
     pipeline_steps: Optional[Dict[str, Dict[str, Any]]] = None,
+    reader: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, list]:
     """Load CSI data, run processing pipeline, and return arrays ready for splitting.
 
     Returns:
-        (processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels)
+        (processed_data, zero_indexed_labels, zero_indexed_groups, unique_labels).
+        For ``xrf55`` the groups are the raw filename trial ids (1-20), kept
+        unmodified because ``_create_xrf55_repetition_split`` keys on them.
     """
-    csi_data_list = readers.load_data(input_path, dataset)
+    reader_name = reader or dataset
+    csi_data_list = readers.load_data(input_path, reader_name)
 
     if pipeline_steps is None:
         processor = BaseProcessor()
@@ -61,9 +65,14 @@ def _load_and_preprocess(
     label_map = {label: i for i, label in enumerate(unique_labels)}
     zero_indexed_labels = [label_map[label] for label in labels]
 
-    unique_groups = sorted(list(set(groups)))
-    group_map = {group: i for i, group in enumerate(unique_groups)}
-    zero_indexed_groups = [group_map[group] for group in groups]
+    if dataset == 'xrf55':
+        # xrf55 groups are filename trial ids (1-20); re-indexing them would
+        # break the repetition split whenever a subset of trials is present.
+        zero_indexed_groups = list(groups)
+    else:
+        unique_groups = sorted(list(set(groups)))
+        group_map = {group: i for i, group in enumerate(unique_groups)}
+        zero_indexed_groups = [group_map[group] for group in groups]
 
     logger.info(f"all unique labels idx: {list(set(zero_indexed_labels))}")
     logger.info(f"all unique groups idx: {list(set(zero_indexed_groups))}")
@@ -113,9 +122,19 @@ def _create_data_split(
         (train_data, val_data, test_data, train_labels, val_labels, test_labels)
     """
     if dataset == "xrf55":
-        return _create_xrf55_repetition_split(
-            processed_data, labels, groups, pipeline_steps=pipeline_steps
-        )
+        try:
+            return _create_xrf55_repetition_split(
+                processed_data, labels, groups, pipeline_steps=pipeline_steps
+            )
+        except RuntimeError:
+            # Trial subsets may lack the fixed protocol ranges (13-16 val,
+            # 17-20 test). Fall back to a repetition-disjoint group split,
+            # which preserves the protocol's cross-repetition intent.
+            logger.warning(
+                "XRF55 trial subset misses a protocol range; falling back to "
+                "repetition-disjoint GroupShuffleSplit. Train-only statistics "
+                "for configured normalization are skipped in this mode."
+            )
 
     if use_simple_split:
         train_data, temp_data, train_labels, temp_labels = train_test_split(
@@ -274,6 +293,7 @@ def pipeline(
     pipeline_steps: Optional[Dict[str, Dict[str, Any]]] = None,
     algorithm_config_file: Optional[str] = None,
     algorithm_preset: Optional[str] = None,
+    reader: Optional[str] = None,
     # Hyperparameter overrides
     batch_size: Optional[int] = None,
     learning_rate: Optional[float] = None,
@@ -301,6 +321,8 @@ def pipeline(
         pipeline_steps: Explicit algorithm pipeline steps for ConfigurableProcessor
         algorithm_config_file: YAML/JSON algorithm config file loaded by wsdp.algorithms.load_config
         algorithm_preset: Algorithm preset name loaded by wsdp.algorithms.apply_preset
+        reader: Optional reader/dataset name used to select the reader. When None,
+            ``dataset`` is used to select the reader.
         batch_size: Override default batch size
         learning_rate: Override default learning rate
         weight_decay: Override default weight decay
@@ -413,6 +435,7 @@ def pipeline(
                 dataset_name,
                 pad_len,
                 pipeline_steps=resolved_pipeline_steps,
+                reader=reader,
             )
         if use_cache and cache_key is not None:
             save_cache(cache_dir, cache_key, processed_data, zero_indexed_labels,
@@ -565,7 +588,8 @@ def pipeline(
     logger.info(f"Variance of Top-1 acc: {variance_accuracy:.6f}")
 
     # ---- persist pipeline record ----
-    reader_name = readers.get_reader_class(dataset_name).__name__
+    reader_key = reader or dataset_name
+    reader_name = readers.get_reader_class(reader_key).__name__
     if resolved_pipeline_steps is None:
         proc_type = "BaseProcessor"
         proc_steps = {"phase_calibration": "default", "wavelet_denoise_csi": "default"}

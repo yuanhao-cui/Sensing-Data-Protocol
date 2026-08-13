@@ -34,8 +34,15 @@ All hyperparameters can be overridden via CLI:
 | Config File | `--config` | None |
 | Algorithm Preset | `--algorithm-preset` | None |
 | Algorithm Config | `--algorithm-config` | None |
-| Num Workers | `--num-workers` | `4` |
-| Use Cache | `--use-cache` | `False` |
+| Reader | `--reader` | Same as DATASET |
+
+> `--config` and `--algorithm-config` are two different files: the former
+> overrides **hyperparameters** (top-level key = dataset name, see the YAML
+> example above), the latter defines the **algorithm pipeline** (see below).
+>
+> `num_workers` and `use_cache` exist only as `pipeline()` parameters — there
+> are no corresponding CLI flags. `use_cache` defaults to `True`; `num_workers`
+> auto-detects to `min(cpu_count, 8)` when not set.
 
 ## Dataset Split Selectors
 
@@ -72,6 +79,8 @@ processed = execute_pipeline(csi, steps)
 | `gesture_recognition` | Butterworth denoise, STC calibration, z-score normalize, cubic interpolation | Gesture tasks |
 | `activity_detection` | Savgol denoise, polynomial calibration, z-score normalize | HAR tasks |
 | `localization` | Wavelet denoise, robust calibration, z-score normalize, cubic interpolation | Localization tasks |
+
+Per-dataset presets (`widar`, `gait`, `xrf55`, `elderAL`, `zte`) are also registered; they currently mirror the legacy default chain (linear calibration + wavelet denoise).
 
 ## Algorithm Selection via YAML
 
@@ -116,7 +125,18 @@ pipeline(
 )
 ```
 
-## New Pipeline Parameters
+## Algorithm Pipeline Resolution Order
+
+When several algorithm options are given, `pipeline()` picks the first available:
+`pipeline_steps` (a flat dict, e.g. `{'denoise': {'method': 'wavelet', 'level': 2}}`)
+> `algorithm_config_file` > `algorithm_preset` > the default chain
+(linear calibration → wavelet denoise).
+
+Steps in a custom config always execute in a fixed category order
+(`denoise → outliers → calibrate → normalize → interpolate → extract_features → detect`),
+regardless of the order they appear in the dict/YAML file.
+
+## Pipeline-Only Parameters
 
 ### `num_workers`
 Number of data loading workers for PyTorch `DataLoader`. Higher values speed up data loading on multi-core systems. Set to `0` for debugging.
