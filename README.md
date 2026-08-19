@@ -175,7 +175,12 @@ SDP projects raw CSI into a fixed **canonical frequency grid (K=30)**, ensuring 
 ![Ablation](./img/ablation_rank.png)
 *Figure 3: Ablation study results*
 
+![Best Models](./img/best_models_accuracy.png)
+*Figure 4: Pipeline tuning versus model selection*
+
 </div>
+
+<p align="justify"><em>The orange bar is the best pipeline found by grid search over five preprocessing steps, tuned per dataset; all four winners use Savitzky-Golay denoising, with MLP on Widar3.0 and Gait, ResNet1D on XRF55 and CSITime on ElderAL-CSI. The blue and teal bars show the top model on its best preset and its mean over the six presets with standard deviation error bars, and the grey bar is the default pipeline. Tuning the pipeline gives larger gains than switching models.</em></p>
 
 ---
 
